@@ -9,10 +9,11 @@ async def main():
         permission_mode="bypassPermissions",
         cwd="./",
         mcp_servers=MCP_SERVERS,
+        model="claude-3-5-haiku-latest",
     )
 
     async for message in query(
-        prompt="Fetch the newest ships from #shipping-szn",
+        prompt="List all channels",
         options=options,
     ):
         print(message)
