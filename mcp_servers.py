@@ -10,7 +10,8 @@ MCP_SERVERS = {
         "command": "npx",
         "args": ["-y", "slack-mcp-server@1.1.25", "--transport", "stdio"],
         "env": {
-            "SLACK_MCP_XOXP_TOKEN": os.getenv("SLACK_MCP_XOXP_TOKEN", ""),
+            "SLACK_MCP_XOXC_TOKEN": os.getenv("SLACK_MCP_XOXC_TOKEN", ""),
+            "SLACK_MCP_XOXD_TOKEN": os.getenv("SLACK_MCP_XOXD_TOKEN", ""),
             "SLACK_MCP_LOG_LEVEL": "debug",
         },
     },
