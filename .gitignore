@@ -1,4 +1,3 @@
-# Python-generated files
 __pycache__/
 *.py[oc]
 build/
@@ -14,3 +13,4 @@ wheels/
 .channels_cache*.json
 .users_cache.json
 updates/
+
