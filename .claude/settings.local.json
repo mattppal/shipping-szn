@@ -1,0 +1,19 @@
+{
+    "permissions": {
+      "allow": [
+        "Bash(npm run lint)",
+        "Bash(npm run test:*)",
+        "Read(~/.zshrc)"
+      ],
+      "deny": [
+        "Bash(curl:*)",
+        "Read(./.env)",
+        "Read(./secrets/**)",
+        "WebFetch"
+      ],
+      "ask": [
+        "Bash(git push:*)",
+        "Write(./production/**)"
+      ]
+    }
+  }
