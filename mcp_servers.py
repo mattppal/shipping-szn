@@ -8,10 +8,11 @@ MCP_SERVERS = {
     # Supports stdio transport by default. Requires tokens.
     "slack": {
         "command": "npx",
-        "args": ["-y", "slack-mcp-server@1.1.25", "--transport", "stdio"],
+        "args": ["-y", "slack-mcp-server@1.1.26", "--transport", "stdio"],
         "env": {
-            "SLACK_MCP_XOXC_TOKEN": os.getenv("SLACK_MCP_XOXC_TOKEN", ""),
-            "SLACK_MCP_XOXD_TOKEN": os.getenv("SLACK_MCP_XOXD_TOKEN", ""),
+            # "SLACK_MCP_XOXC_TOKEN": os.getenv("SLACK_MCP_XOXC_TOKEN", ""),
+            # "SLACK_MCP_XOXD_TOKEN": os.getenv("SLACK_MCP_XOXD_TOKEN", ""),
+            "SLACK_MCP_XOXP_TOKEN": os.getenv("SLACK_MCP_XOXP_TOKEN", ""),
             "SLACK_MCP_LOG_LEVEL": "debug",
         },
     },
@@ -19,14 +20,11 @@ MCP_SERVERS = {
     "github": {
         "type": "http",
         "url": "https://api.githubcopilot.com/mcp/",
-        "env": {
-            "GITHUB_PERSONAL_ACCESS_TOKEN": os.getenv(
-                "GITHUB_PERSONAL_ACCESS_TOKEN", ""
-            ),
-            # Optional: limit toolsets or enable all
-            "GITHUB_TOOLSETS": os.getenv(
-                "GITHUB_TOOLSETS", "repos,pull_requests,issues"
-            ),
+        "headers": {
+            "X-MCP-Toolsets": "pull_requests,repos",
+            "Authorization": "Bearer " + os.getenv("GITHUB_PERSONAL_ACCESS_TOKEN", ""),
         },
     },
+    "mintlify": {"url": "https://mintlify.com/docs/mcp"},
+    "replit": {"url": "https://replit.com/docs/mcp"},
 }

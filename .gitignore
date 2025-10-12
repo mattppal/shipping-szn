@@ -5,10 +5,12 @@ build/
 dist/
 wheels/
 *.egg-info
+.mypy_cache/
 
 # Virtual environments
 .venv
 .git
 .env
-.channels_cache.json
+.channels_cache*.json
 .users_cache.json
+updates/
