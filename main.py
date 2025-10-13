@@ -3,6 +3,9 @@ from claude_agent_sdk import (
     query,
     ClaudeAgentOptions,
     AgentDefinition,
+    AssistantMessage,
+    TextBlock,
+    ResultMessage,
 )
 from mcp_servers import MCP_SERVERS
 
@@ -51,40 +54,35 @@ PROMPT = """
 # 2. Configure permissions
 
 
-def create_research_agent(options: ClaudeAgentOptions):
-    return AgentDefinition(description="", prompt="", tools=[], model="haiku")
-
-
-def create_mintlify_agent(options: ClaudeAgentOptions):
-    return AgentDefinition(description="", prompt="", tools=[], model="haiku")
-
-
-def create_slack_agent(options: ClaudeAgentOptions):
-    return AgentDefinition(description="", prompt="", tools=[], model="sonnet")
-
-
-def developer_relations_agent(options: ClaudeAgentOptions):
-    return AgentDefinition(description="", prompt="", tools=[], model="sonnet")
-
-
-def review_agent(options: ClaudeAgentOptions):
-    return AgentDefinition(description="", prompt="", tools=[], model="opus")
-
-
 async def main():
     options = ClaudeAgentOptions(
+        agents={
+            "developer_relations": AgentDefinition(
+                description="Use this agent to review copy and provide feedback on the PR",
+                prompt="You are an expert developer relations professional. You are given a PR and you need to review the copy and provide feedback on the PR.",
+                model="haiku",
+            ),
+            "slack": AgentDefinition(
+                description="Use this agent to fetch data from slack",
+                prompt="You are an expert developer relations professional. You are given a PR and you need to review the copy and provide feedback on the PR.",
+                model="haiku",
+            ),
+            "mintlify": AgentDefinition(
+                description="Use this agent to fetch data from mintlify",
+                prompt="You are an expert developer relations professional. You are given a PR and you need to review the copy and provide feedback on the PR.",
+                model="haiku",
+            ),
+            "replit": AgentDefinition(
+                description="Use this agent to fetch data from replit",
+                prompt="You are an expert developer relations professional. You are given a PR and you need to review the copy and provide feedback on the PR.",
+                model="haiku",
+            ),
+        },
         system_prompt="You are an expert developer relations professional.",
         permission_mode="acceptEdits",
         mcp_servers=MCP_SERVERS,
         model="claude-sonnet-4-5-20250929",
         cwd="./",
-        agents=[
-            create_research_agent,
-            create_mintlify_agent,
-            create_slack_agent,
-            developer_relations_agent,
-            review_agent,
-        ],
         setting_sources=["local"],
     )
 
@@ -92,7 +90,17 @@ async def main():
         prompt=PROMPT,
         options=options,
     ):
-        print(message)
+        if isinstance(message, AssistantMessage):
+            for block in message.content:
+                if isinstance(block, TextBlock):
+                    print(f"Claude: {block.text}")
+        elif (
+            isinstance(message, ResultMessage)
+            and message.total_cost_usd
+            and message.total_cost_usd > 0
+        ):
+            print(f"\nCost: ${message.total_cost_usd:.4f}")
+    print()
 
 
 asyncio.run(main())
