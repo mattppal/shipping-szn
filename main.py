@@ -1,4 +1,6 @@
 import asyncio
+import os
+from datetime import datetime
 from claude_agent_sdk import (
     query,
     ClaudeAgentOptions,
@@ -7,37 +9,23 @@ from claude_agent_sdk import (
     TextBlock,
     ResultMessage,
 )
+
 from mcp_servers import MCP_SERVERS
 
+
 PROMPT = """
-    You have access to the following mcp servers:
-    
-        - github: use this server to open a PR with the update and perform all other github related actions
-        - slack: use this server to fetch data from slack
-        - mintlify (our docs framework): use this server to research the functionality of the repo itself
-        - replit (our product): use this server to research product functionality and fetch links to features. All links should be formatted using relative paths
+    You are the orchestrator for creating and shipping a product changelog.
 
-    You should use the mcp servers to fetch data and take all actions needed to complete the task.
+    Delegate concrete work to subagents and coordinate end-to-end:
+        1. changelog_writer: fetch updates from Slack and draft the changelog file
+        2. review_and_feedback: review copy/tone/accuracy and suggest or apply improvements (after the changelog is written)
+        3. pr_writer: create a branch, commit the changelog file, and open a GitHub PR
 
-    DO NOT clone the repository (you are working in a virtual environment), but rather create any necessary files locally and use the github mcp server to open the PR with the update.
+    Guidance and constraints:
+        - Use configured MCP servers to fetch data and take actions. Do not use external CLIs.
+        - Do NOT clone the repository. Create files locally, then use the GitHub MCP server for git + PR actions.
 
-    DO NOT use github cli, use the github mcp server instead.
-
-    Your goal is to create a changelog for recent updates to our product.
-
-    You will do so by:
-        1. Fetching the last 7 days of messages in the #shipping-szn channel
-        2. Summarizing the messages into a structured changelog format
-        3. Creating a local file ./updates/YYYY-MM-DD.md with the changelog content, 
-        reflecting the current date. Do not use temp folders, write to the updates folder in this directory.
-        4. For each update, include the slack message URL as a citation to help 
-        reviewers understand the context
-        5. Using the github mcp server to create a new branch for the changes
-        6. Committing the changelog file to the new branch
-        7. Opening a PR for the ccc repository on github (mattppal/ccc) with the 
-        date in the PR title
-
-    Remember to use the github mcp server to open the PR with the update.
+    Plan the sequence, route tasks to the appropriate subagent, verify outputs between steps, and finish when the PR is open and ready for review.
 """
 
 
@@ -50,40 +38,99 @@ PROMPT = """
 # 6. Review the PR to check for devex errors, etc.
 
 # TODO:
-# 1. Define subagents
 # 2. Configure permissions
 
 
 async def main():
     options = ClaudeAgentOptions(
         agents={
-            "developer_relations": AgentDefinition(
+            "review_and_feedback": AgentDefinition(
                 description="Use this agent to review copy and provide feedback on the PR",
-                prompt="You are an expert developer relations professional. You are given a PR and you need to review the copy and provide feedback on the PR.",
+                prompt="""
+                    You are an expert developer relations professional focused on editorial review.
+                    Given a draft changelog and/or PR, evaluate for clarity, tone, correctness, and developer experience.
+                    Provide specific, actionable suggestions and, when appropriate, propose improved wording.
+                    Check that: brand voice is consistent, technical claims are accurate, links work and are relative, and entries include necessary context.
+                    Return a concise list of recommendations and, if asked, an edited version of the text.
+                """,
                 model="haiku",
+                tools=[
+                    "mcp__mintlify__SearchMintlify",
+                    "mcp__replit__SearchReplit",
+                    "Read",
+                    "Write",
+                    "Edit",
+                ],
             ),
-            "slack": AgentDefinition(
-                description="Use this agent to fetch data from slack",
-                prompt="You are an expert developer relations professional. You are given a PR and you need to review the copy and provide feedback on the PR.",
+            "changelog_writer": AgentDefinition(
+                description="Fetch updates from slack, summarize them, and add relevant links + context from the replit documentation and web search",
+                prompt=f"""
+                    You are a changelog writer. Create this week's changelog from Slack updates and related docs.
+                    
+                    Time window: {(datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')} to {datetime.now().strftime('%Y-%m-%d')}
+                    Slack channel: {os.getenv('SLACK_CHANNEL_NAME')}, (ID: {os.getenv('SLACK_CHANNEL_ID')})
+                    
+                    Requirements:
+                    - Extract product changes, summarize crisply, and group logically
+                    - Include the originating Slack message URL for each entry as a citation
+                    - Create a local file at ./docs/updates/YYYY-MM-DD.md (today’s date)
+                    - Augment entries with relevant Replit docs links using relative paths (no absolute URLs)
+                    - Do not use temp folders; write to ./updates directly
+
+                    Tools: Use the Slack MCP server to fetch messages and the Replit docs MCP to find relevant links.
+                """,
                 model="haiku",
+                tools=[
+                    "mcp__slack__channels_list",
+                    "mcp__slack__conversations_history",
+                    "mcp__slack__conversations_replies",
+                    "mcp__slack__conversations_search_messages",
+                    "Read",
+                    "Write",
+                    "Edit",
+                    "mcp__replit__SearchReplit",
+                    "WebSearch",
+                ],
             ),
-            "mintlify": AgentDefinition(
-                description="Use this agent to fetch data from mintlify",
-                prompt="You are an expert developer relations professional. You are given a PR and you need to review the copy and provide feedback on the PR.",
+            "pr_writer": AgentDefinition(
+                description="Draft a PR using our brand guidelines and changelog format",
+                prompt=f"""
+                    You are responsible for packaging and submitting the changelog via GitHub.
+
+                    Repository: {os.getenv('GITHUB_REPO')}
+
+                    Given the generated file at ./docs/updates/YYYY-MM-DD.md:
+                    - Create a new branch for the change
+                    - Format the changelog according to the changelog template ./changelog_template.md
+                    - Commit the changelog file to the same relative path (./docs/updates/YYYY-MM-DD.md) in replit/replit-docs
+                    - Open a PR to the repository using the GitHub MCP server (not the CLI)
+                    - Update the docs.json in the github repository with the new changelog
+                    - Ensure links are relative and Slack citations are present
+
+                    Use only the configured GitHub MCP server for all Git actions. Do not clone the repository. Do not use the CLI.
+                """,
                 model="haiku",
-            ),
-            "replit": AgentDefinition(
-                description="Use this agent to fetch data from replit",
-                prompt="You are an expert developer relations professional. You are given a PR and you need to review the copy and provide feedback on the PR.",
-                model="haiku",
+                tools=[
+                    "mcp__github__create_pull_request",
+                    "mcp__github__create_branch",
+                    "mcp__github__list_branches",
+                    "mcp__github__list_commits",
+                    "mcp__github__push_files",
+                    "mcp__github__update_pull_request",
+                    "mcp__mintlify__SearchMintlify",
+                    "Read",
+                    "Write",
+                    "Edit",
+                    "WebSearch",
+                ],
             ),
         },
         system_prompt="You are an expert developer relations professional.",
-        permission_mode="acceptEdits",
-        mcp_servers=MCP_SERVERS,
+        permission_mode="bypassPermissions",
         model="claude-sonnet-4-5-20250929",
         cwd="./",
         setting_sources=["local"],
+        mcp_servers=MCP_SERVERS,
     )
 
     async for message in query(
@@ -100,6 +147,8 @@ async def main():
             and message.total_cost_usd > 0
         ):
             print(f"\nCost: ${message.total_cost_usd:.4f}")
+        else:
+            print(message)
     print()
 
 
