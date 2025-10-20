@@ -1,11 +1,12 @@
 import asyncio
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from claude_agent_sdk import (
     query,
     ClaudeAgentOptions,
     AgentDefinition,
     AssistantMessage,
+    SystemMessage,
     TextBlock,
     ResultMessage,
 )
@@ -28,7 +29,6 @@ PROMPT = """
     Plan the sequence, route tasks to the appropriate subagent, verify outputs between steps, and finish when the PR is open and ready for review.
 """
 
-
 # Steps:
 # 1. Fetch updates from slack (easy) [future: linear, github]
 # 2. Research the updates to understand context
@@ -37,11 +37,9 @@ PROMPT = """
 # 5. Review the PR to match our tone
 # 6. Review the PR to check for devex errors, etc.
 
-# TODO:
-# 2. Configure permissions
-
 
 async def main():
+
     options = ClaudeAgentOptions(
         agents={
             "review_and_feedback": AgentDefinition(
@@ -57,37 +55,37 @@ async def main():
                 tools=[
                     "mcp__mintlify__SearchMintlify",
                     "mcp__replit__SearchReplit",
-                    "Read",
-                    "Write",
-                    "Edit",
+                    "Read(./docs/updates/**)",
+                    "Edit(./docs/updates/**)",
                 ],
             ),
             "changelog_writer": AgentDefinition(
                 description="Fetch updates from slack, summarize them, and add relevant links + context from the replit documentation and web search",
                 prompt=f"""
                     You are a changelog writer. Create this week's changelog from Slack updates and related docs.
-                    
-                    Time window: {(datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')} to {datetime.now().strftime('%Y-%m-%d')}
-                    Slack channel: {os.getenv('SLACK_CHANNEL_NAME')}, (ID: {os.getenv('SLACK_CHANNEL_ID')})
-                    
-                    Requirements:
-                    - Extract product changes, summarize crisply, and group logically
-                    - Include the originating Slack message URL for each entry as a citation
-                    - Create a local file at ./docs/updates/YYYY-MM-DD.md (today’s date)
-                    - Augment entries with relevant Replit docs links using relative paths (no absolute URLs)
-                    - Do not use temp folders; write to ./updates directly
 
-                    Tools: Use the Slack MCP server to fetch messages and the Replit docs MCP to find relevant links.
+                    Time window: {(datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')} to {datetime.now().strftime('%Y-%m-%d')}
+                    Slack channel ID: {os.getenv('SLACK_CHANNEL_ID')}
+
+                    Requirements:
+                    - Use fetch_messages_from_channel tool with channel_id and days_back=7 to fetch messages
+                    - Extract product changes, summarize crisply, and group logically
+                    - Include the originating Slack message URL (permalink) for each entry as a citation
+                    - Create a local file at ./docs/updates/YYYY-MM-DD.md (today's date)
+                    - Augment entries with relevant Replit docs links using relative paths (no absolute URLs)
+                    - Write directly to ./docs/updates/ (no temp folders)
+
+                    Tools available:
+                    - fetch_messages_from_channel: Fetch messages with all media and threads from a Slack channel
+                    - SearchReplit: Find relevant documentation links
+                    - WebSearch: Search the web for additional context
                 """,
-                model="haiku",
+                model="sonnet",
                 tools=[
-                    "mcp__slack__channels_list",
-                    "mcp__slack__conversations_history",
-                    "mcp__slack__conversations_replies",
-                    "mcp__slack__conversations_search_messages",
-                    "Read",
-                    "Write",
-                    "Edit",
+                    "mcp__slack__fetch_messages_from_channel",
+                    "Read(./docs/updates/**)",
+                    "Write(./docs/updates/**)",
+                    "Edit(./docs/updates/**)",
                     "mcp__replit__SearchReplit",
                     "WebSearch",
                 ],
@@ -101,13 +99,16 @@ async def main():
 
                     Given the generated file at ./docs/updates/YYYY-MM-DD.md:
                     - Create a new branch for the change
-                    - Format the changelog according to the changelog template ./changelog_template.md
+                    - Format the changelog according to the changelog template
                     - Commit the changelog file to the same relative path (./docs/updates/YYYY-MM-DD.md) in replit/replit-docs
                     - Open a PR to the repository using the GitHub MCP server (not the CLI)
                     - Update the docs.json in the github repository with the new changelog
-                    - Ensure links are relative and Slack citations are present
 
                     Use only the configured GitHub MCP server for all Git actions. Do not clone the repository. Do not use the CLI.
+
+                    <changelog_template>
+                    {open('changelog_template.md').read()}
+                    </changelog_template>
                 """,
                 model="haiku",
                 tools=[
@@ -118,16 +119,15 @@ async def main():
                     "mcp__github__push_files",
                     "mcp__github__update_pull_request",
                     "mcp__mintlify__SearchMintlify",
-                    "Read",
-                    "Write",
-                    "Edit",
+                    "Read(./docs/updates/**)",
+                    "Edit(./docs/updates/**)",
                     "WebSearch",
                 ],
             ),
         },
         system_prompt="You are an expert developer relations professional.",
         permission_mode="bypassPermissions",
-        model="claude-sonnet-4-5-20250929",
+        model=os.getenv("ORCHESTRATOR_MODEL"),
         cwd="./",
         setting_sources=["local"],
         mcp_servers=MCP_SERVERS,
@@ -141,6 +141,8 @@ async def main():
             for block in message.content:
                 if isinstance(block, TextBlock):
                     print(f"Claude: {block.text}")
+        if isinstance(message, SystemMessage):
+            print(message.data)
         elif (
             isinstance(message, ResultMessage)
             and message.total_cost_usd

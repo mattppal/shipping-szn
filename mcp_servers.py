@@ -1,20 +1,12 @@
 import os
 import dotenv
-from claude_agent_sdk.types import McpHttpServerConfig, McpStdioServerConfig
+from claude_agent_sdk.types import McpHttpServerConfig
+from claude_agent_sdk import create_sdk_mcp_server
+from slack_tools_simple import fetch_messages_from_channel
 
 dotenv.load_dotenv()
 
 MCP_SERVERS = {
-    # Slack MCP Server (korotovsky/slack-mcp-server)
-    # Supports stdio transport by default. Requires tokens.
-    "slack": McpStdioServerConfig(
-        command="npx",
-        args=["-y", "slack-mcp-server@1.1.26", "--transport", "stdio"],
-        env={
-            "SLACK_MCP_XOXP_TOKEN": os.getenv("SLACK_MCP_XOXP_TOKEN", ""),
-            "SLACK_MCP_LOG_LEVEL": "debug",
-        },
-    ),
     # GitHub MCP Server (github/github-mcp-server)
     "github": McpHttpServerConfig(
         type="http",
@@ -32,4 +24,5 @@ MCP_SERVERS = {
         type="http",
         url="https://docs.replit.com/mcp",
     ),
+    "slack": create_sdk_mcp_server(name="slack", tools=[fetch_messages_from_channel]),
 }
