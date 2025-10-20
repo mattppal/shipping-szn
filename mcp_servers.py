@@ -1,8 +1,7 @@
 import os
+import sys
 import dotenv
-from claude_agent_sdk.types import McpHttpServerConfig
-from claude_agent_sdk import create_sdk_mcp_server
-from slack_tools_simple import fetch_messages_from_channel
+from claude_agent_sdk.types import McpHttpServerConfig, McpStdioServerConfig
 
 dotenv.load_dotenv()
 
@@ -24,5 +23,14 @@ MCP_SERVERS = {
         type="http",
         url="https://docs.replit.com/mcp",
     ),
-    "slack": create_sdk_mcp_server(name="slack", tools=[fetch_messages_from_channel]),
+    # Slack MCP Server (subprocess stdio server)
+    # TODO: https://github.com/anthropics/claude-agent-sdk-python/issues/207#issuecomment-3390445122
+    "slack": McpStdioServerConfig(
+        type="stdio",
+        command=sys.executable,  # Use current Python interpreter
+        args=[os.path.join(os.path.dirname(__file__), "slack_mcp_server.py")],
+        env={
+            "SLACK_MCP_TOKEN": os.getenv("SLACK_MCP_TOKEN", ""),
+        },
+    ),
 }

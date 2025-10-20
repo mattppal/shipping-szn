@@ -8,7 +8,7 @@ import mimetypes
 import os
 import re
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import requests
 from claude_agent_sdk import tool
@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize Slack client
-slack_client = WebClient(token=os.getenv("SLACK_MCP_XOXP_TOKEN"))
+slack_client = WebClient(token=os.getenv("SLACK_MCP_TOKEN"))
 
 # Configuration
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
@@ -48,32 +48,52 @@ def slugify(text: str) -> str:
 
 
 def download_media_file(url: str, description: str = "") -> Optional[Dict]:
-    """Download media file from Slack."""
+    """Download media file from Slack.
+
+    Note: Slack's url_private already contains the token as a query parameter,
+    so we don't need to add Authorization headers.
+    """
     try:
-        headers = {"Authorization": f"Bearer {os.getenv('SLACK_MCP_XOXP_TOKEN')}"}
-        response = requests.get(url, headers=headers)
+        # Slack's url_private already includes authentication
+        # Just add the Authorization header as backup
+        headers = {"Authorization": f"Bearer {os.getenv('SLACK_MCP_TOKEN')}"}
+        response = requests.get(url, headers=headers, allow_redirects=True)
         response.raise_for_status()
 
         content_type = response.headers.get("content-type", "")
+
+        # Get base filename from description and slugify it
         base_filename = slugify(description) if description else "media"
+
+        # If slugify resulted in empty string, use default
+        if not base_filename:
+            base_filename = "media"
 
         # Get extension from content type
         extension = mimetypes.guess_extension(content_type) or ""
         if extension and extension.startswith("."):
-            extension = extension[1:]
+            extension = extension[1:]  # Remove leading dot
 
-        # Create unique filename with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        filename = f"{base_filename[:50]}-{timestamp}"
-        if extension:
-            filename += f".{extension}"
+        # Limit base filename length to ensure total path length is reasonable
+        max_base_length = 50
+        if len(base_filename) > max_base_length:
+            base_filename = base_filename[:max_base_length].rstrip("-")
+
+        # Add timestamp to ensure uniqueness
+        timestamp = datetime.now().strftime("%H%M%S")
+        filename = (
+            f"{base_filename}-{timestamp}.{extension}"
+            if extension
+            else f"{base_filename}-{timestamp}"
+        )
 
         size_bytes = len(response.content)
+
         if size_bytes > MAX_FILE_SIZE:
             logger.warning(f"File {filename} exceeds size limit")
             return None
 
-        # Save to disk
+        # Save to disk with date-based directory
         date_str = datetime.now().strftime("%Y-%m-%d")
         media_dir = os.path.join(MEDIA_BASE_DIR, date_str)
         os.makedirs(media_dir, exist_ok=True)
@@ -85,14 +105,15 @@ def download_media_file(url: str, description: str = "") -> Optional[Dict]:
         logger.info(f"Downloaded: {filename} ({size_bytes} bytes)")
 
         return {
+            "content": response.content,
             "filename": filename,
-            "local_path": local_path,
             "mimetype": content_type,
+            "local_path": local_path,
             "size": size_bytes,
         }
 
     except Exception as e:
-        logger.error(f"Error downloading media: {str(e)}")
+        logger.error(f"Error downloading media: {str(e)}", exc_info=True)
         return None
 
 
@@ -143,30 +164,18 @@ def process_message_files(files: List[Dict], message_text: str) -> List[Dict]:
 
 
 @tool(
-    "fetch_messages_from_channel",
-    "Fetch messages from a Slack channel within a specified time range. Downloads all media files (images, videos) to ./docs/updates/media/YYYY-MM-DD/. Processes main messages and thread replies.",
-    {
-        "type": "object",
-        "properties": {
-            "channel_id": {
-                "type": "string",
-                "description": "ID of the Slack channel (e.g., C1234567890)",
-            },
-            "days_back": {
-                "type": "number",
-                "description": "Number of days to look back (default: 7)",
-            },
-        },
-        "required": ["channel_id"],
+    name="fetch_messages_from_channel",
+    description="Fetch messages from a Slack channel within a specified time range. Downloads all media files (images, videos) to ./docs/updates/media/YYYY-MM-DD/. Processes main messages and thread replies.",
+    input_schema={
+        "channel_id": str,
+        "days_back": int,
     },
 )
-def fetch_messages_from_channel(args: Dict) -> Dict:
+async def fetch_messages_from_channel(args: dict[str, Any]) -> dict[str, Any]:
     """Fetch messages from a Slack channel with all media and threads.
 
     Returns a dictionary with content array for Claude Agent SDK.
     """
-    import json
-
     try:
         channel_id = args.get("channel_id")
         days_back = int(args.get("days_back", 7))
@@ -241,32 +250,48 @@ def fetch_messages_from_channel(args: Dict) -> Dict:
         summary += f"📎 Downloaded {total_files} media files to {MEDIA_BASE_DIR}\n\n"
         summary += "=" * 60 + "\n\n"
 
-        # Add message details
+        # Add concise message details
         for i, msg in enumerate(messages, 1):
-            summary += f"Message {i}:\n"
-            summary += f"  User: {msg.get('user', 'unknown')}\n"
+            summary += f"\n📝 Message {i}:\n"
+            summary += f"   👤 User: {msg.get('user', 'unknown')}\n"
+            summary += f"   📅 Timestamp: {datetime.fromtimestamp(float(msg.get('ts', 0))).strftime('%Y-%m-%d %H:%M:%S')}\n"
+
             text = msg.get("text", "")
-            summary += f"  Text: {text[:150]}{'...' if len(text) > 150 else ''}\n"
-            summary += f"  Permalink: {msg.get('permalink')}\n"
+            # Truncate very long messages
+            if len(text) > 300:
+                summary += f"   💬 Text: {text[:300]}...\n"
+            else:
+                summary += f"   💬 Text: {text}\n"
 
+            summary += f"   🔗 Link: {msg.get('permalink', 'N/A')}\n"
+
+            # List downloaded files with their types
             if msg.get("processed_files"):
-                summary += f"  Files: {len(msg['processed_files'])} downloaded\n"
+                summary += f"   📎 Files ({len(msg['processed_files'])}):\n"
                 for file in msg["processed_files"]:
-                    summary += f"    - {file['filename']} at {file['local_path']}\n"
+                    file_type = "🖼️ Image" if file.get("is_image") else "🎥 Video" if file.get("is_video") else "📄 File"
+                    summary += f"      {file_type}: {file['filename']}\n"
+                    summary += f"        Path: {file['local_path']}\n"
 
+            # Thread info
             if msg.get("replies"):
-                summary += f"  Replies: {len(msg['replies'])} thread replies\n"
+                reply_count = len(msg["replies"])
+                summary += f"   💬 Thread: {reply_count} {'reply' if reply_count == 1 else 'replies'}\n"
 
-            summary += "\n"
+                # List files from replies too
+                reply_files = 0
+                for reply in msg["replies"]:
+                    if reply.get("processed_files"):
+                        reply_files += len(reply["processed_files"])
 
-        # Return full data as JSON for programmatic access
-        full_json = json.dumps(messages, indent=2, default=str)
+                if reply_files > 0:
+                    summary += f"      📎 Reply files: {reply_files}\n"
 
         return {
             "content": [
                 {
                     "type": "text",
-                    "text": f"{summary}\n\n--- Full Message Data (JSON) ---\n{full_json}",
+                    "text": summary,
                 }
             ]
         }
