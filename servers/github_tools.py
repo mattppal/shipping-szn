@@ -5,7 +5,7 @@ import logging
 import os
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from claude_agent_sdk import tool
 from dotenv import load_dotenv
@@ -30,7 +30,7 @@ if not GITHUB_REPO:
 github_client = Github(GITHUB_TOKEN)
 
 # Configuration
-DOCS_JSON_PATH = "docs.json"
+DOCS_JSON_PATH = "docs/docs.json"
 
 
 # ============================================================================

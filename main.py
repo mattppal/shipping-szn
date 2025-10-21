@@ -45,7 +45,6 @@ permission_groups = {
         permissions["write_docs"],
         permissions["edit_docs"],
         permissions["search_replit"],
-        permissions["web_search"],
     ],
     "pr_writer": [
         permissions["create_changelog_pr"],
@@ -81,25 +80,6 @@ async def main():
 
     options = ClaudeAgentOptions(
         agents={
-            "review_and_feedback": AgentDefinition(
-                description="Use this agent to review copy and provide feedback on the PR",
-                prompt="""
-                    You are an expert developer relations professional focused on editorial review.
-                    Given a draft changelog and/or PR, evaluate for clarity, tone, correctness, and developer experience.
-                    Provide specific, actionable suggestions and, when appropriate, propose improved wording.
-                    Check that: brand voice is consistent, technical claims are accurate, links work and are relative, and entries include necessary context.
-                    Return a concise list of recommendations and, if asked, an edited version of the text.
-                    Assume all details are correct and start work.
-                """,
-                model="haiku",
-                tools=[
-                    permissions["read_docs"],
-                    permissions["edit_docs"],
-                    permissions["web_search"],
-                    permissions["search_mintlify"],
-                    permissions["search_replit"],
-                ],
-            ),
             "changelog_writer": AgentDefinition(
                 description="Fetch updates from slack, summarize them, and add relevant links + context from the replit documentation and web search",
                 prompt=f"""
@@ -128,6 +108,25 @@ async def main():
                 """,
                 model="sonnet",
                 tools=permission_groups["changelog_writer"],
+            ),
+            "review_and_feedback": AgentDefinition(
+                description="Use this agent to review copy and provide feedback on the PR",
+                prompt="""
+                    You are an expert developer relations professional focused on editorial review.
+                    Given a draft changelog and/or PR, evaluate for clarity, tone, correctness, and developer experience.
+                    Provide specific, actionable suggestions and, when appropriate, propose improved wording.
+                    Check that: brand voice is consistent, technical claims are accurate, links work and are relative, and entries include necessary context.
+                    Return a concise list of recommendations and, if asked, an edited version of the text.
+                    Assume all details are correct and start work.
+                """,
+                model="haiku",
+                tools=[
+                    permissions["read_docs"],
+                    permissions["edit_docs"],
+                    permissions["web_search"],
+                    permissions["search_mintlify"],
+                    permissions["search_replit"],
+                ],
             ),
             "pr_writer": AgentDefinition(
                 description="Draft a PR using our brand guidelines and changelog format",
