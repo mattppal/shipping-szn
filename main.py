@@ -1,3 +1,11 @@
+# Workflow:
+# 1. Fetch updates from slack (easy) [future: linear, github]
+# 2. Research the updates to understand context
+# 3. Fetch images from slack (N/A)
+# 4. Draft PR using our brand guidelines and changelog format
+# 5. Review the PR to match our tone
+# 6. Review the PR to check for devex errors, etc.
+
 import asyncio
 import os
 from dotenv import load_dotenv
@@ -15,6 +23,7 @@ load_dotenv()
 
 
 permissions = {
+    # read/write/edit/glob docs and media
     "read_docs": "Read(./docs/**)",
     "write_docs": "Write(./docs/**)",
     "edit_docs": "Edit(./docs/**)",
@@ -23,11 +32,14 @@ permissions = {
     "write_media": "Write(./docs/updates/media/**)",
     "edit_media": "Edit(./docs/updates/media/**)",
     "glob_media": "Glob(./docs/updates/media/**)",
+    # search tools
     "web_search": "WebSearch",
-    "create_changelog_pr": "mcp__github_changelog__create_changelog_pr",
-    "update_pull_request": "mcp__github__update_pull_request",
     "search_mintlify": "mcp__mintlify__SearchMintlify",
     "search_replit": "mcp__replit__SearchReplit",
+    # github tools
+    "create_changelog_pr": "mcp__github_changelog__create_changelog_pr",
+    "update_pull_request": "mcp__github__update_pull_request",
+    # slack tools
     "fetch_messages_from_channel": "mcp__slack_updates__fetch_messages_from_channel",
 }
 
@@ -86,15 +98,6 @@ Plan the sequence, route tasks to the appropriate subagent, verify outputs betwe
 
 Assume subagents have all relevant information required to begin work.
 """
-
-# Steps:
-# 1. Fetch updates from slack (easy) [future: linear, github]
-# 2. Research the updates to understand context
-# 3. Fetch images from slack (N/A)
-# 4. Draft PR using our brand guidelines and changelog format
-# 5. Review the PR to match our tone
-# 6. Review the PR to check for devex errors, etc.
-
 
 async def main():
 

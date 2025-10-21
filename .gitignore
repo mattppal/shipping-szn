@@ -13,4 +13,5 @@ wheels/
 .channels_cache*.json
 .users_cache.json
 updates/
-
+docs/**/*/**
+.claude/**
