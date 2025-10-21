@@ -1,32 +1,75 @@
 import asyncio
 import os
+from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from claude_agent_sdk import (
-    query,
     ClaudeAgentOptions,
     AgentDefinition,
-    AssistantMessage,
-    SystemMessage,
-    TextBlock,
-    ResultMessage,
+    ClaudeSDKClient,
 )
 
-from mcp_servers import MCP_SERVERS
+from servers.config import MCP_SERVERS
+from util.messages import display_message
+
+load_dotenv()
 
 
-PROMPT = """
-    You are the orchestrator for creating and shipping a product changelog.
+permissions = {
+    "read_docs": "Read(./docs/**)",
+    "write_docs": "Write(./docs/**)",
+    "edit_docs": "Edit(./docs/**)",
+    "glob_docs": "Glob(./docs/**)",
+    "web_search": "WebSearch",
+    "create_changelog_pr": "mcp__github_changelog__create_changelog_pr",
+    "update_pull_request": "mcp__github__update_pull_request",
+    "search_mintlify": "mcp__mintlify__SearchMintlify",
+    "search_replit": "mcp__replit__SearchReplit",
+    "fetch_messages_from_channel": "mcp__slack__fetch_messages_from_channel",
+}
 
-    Delegate concrete work to subagents and coordinate end-to-end:
-        1. changelog_writer: fetch updates from Slack and draft the changelog file
-        2. review_and_feedback: review copy/tone/accuracy and suggest or apply improvements (after the changelog is written)
-        3. pr_writer: create a branch, commit the changelog file, and open a GitHub PR
+permission_groups = {
+    "review_and_feedback": [
+        permissions["read_docs"],
+        permissions["edit_docs"],
+        permissions["web_search"],
+        permissions["search_mintlify"],
+        permissions["search_replit"],
+    ],
+    "changelog_writer": [
+        permissions["fetch_messages_from_channel"],
+        permissions["read_docs"],
+        permissions["write_docs"],
+        permissions["edit_docs"],
+        permissions["search_replit"],
+        permissions["web_search"],
+    ],
+    "pr_writer": [
+        permissions["create_changelog_pr"],
+        permissions["update_pull_request"],
+        permissions["search_mintlify"],
+        permissions["web_search"],
+        permissions["read_docs"],
+        permissions["write_docs"],
+        permissions["edit_docs"],
+        permissions["glob_docs"],
+    ],
+}
 
-    Guidance and constraints:
-        - Use configured MCP servers to fetch data and take actions. Do not use external CLIs.
-        - Do NOT clone the repository. Create files locally, then use the GitHub MCP server for git + PR actions.
 
-    Plan the sequence, route tasks to the appropriate subagent, verify outputs between steps, and finish when the PR is open and ready for review.
+USER_PROMPT = """You are the orchestrator for creating and shipping a product changelog.
+
+Delegate concrete work to subagents and coordinate end-to-end:
+    1. changelog_writer: fetch updates from Slack and draft the changelog file
+    2. review_and_feedback: review copy/tone/accuracy and suggest or apply improvements (after the changelog is written)
+    3. pr_writer: create a branch, commit the changelog file, and open a GitHub PR
+
+Guidance and constraints:
+    - Use configured MCP servers to fetch data and take actions. Do not use external CLIs.
+    - Do NOT clone the repository. Create files locally, then use the GitHub MCP server for git + PR actions.
+
+Plan the sequence, route tasks to the appropriate subagent, verify outputs between steps, and finish when the PR is open and ready for review.
+
+Assume subagents have all relevant information required to begin work.
 """
 
 # Steps:
@@ -53,10 +96,11 @@ async def main():
                 """,
                 model="haiku",
                 tools=[
-                    "mcp__mintlify__SearchMintlify",
-                    "mcp__replit__SearchReplit",
-                    "Read(./docs/updates/**)",
-                    "Edit(./docs/updates/**)",
+                    permissions["read_docs"],
+                    permissions["edit_docs"],
+                    permissions["web_search"],
+                    permissions["search_mintlify"],
+                    permissions["search_replit"],
                 ],
             ),
             "changelog_writer": AgentDefinition(
@@ -81,14 +125,7 @@ async def main():
                     - WebSearch: Search the web for additional context
                 """,
                 model="sonnet",
-                tools=[
-                    "mcp__slack__fetch_messages_from_channel",
-                    "Read(./docs/updates/**)",
-                    "Write(./docs/updates/**)",
-                    "Edit(./docs/updates/**)",
-                    "mcp__replit__SearchReplit",
-                    "WebSearch",
-                ],
+                tools=permission_groups["changelog_writer"],
             ),
             "pr_writer": AgentDefinition(
                 description="Draft a PR using our brand guidelines and changelog format",
@@ -98,31 +135,26 @@ async def main():
                     Repository: {os.getenv('GITHUB_REPO')}
 
                     Given the generated file at ./docs/updates/YYYY-MM-DD.md:
-                    - Create a new branch for the change
-                    - Format the changelog according to the changelog template
-                    - Commit the changelog file to the same relative path (./docs/updates/YYYY-MM-DD.md) in replit/replit-docs
-                    - Open a PR to the repository using the GitHub MCP server (not the CLI)
-                    - Update the docs.json in the github repository with the new changelog
+                    Use create_changelog_pr to create the complete PR with:
+                       - The formatted changelog content (or path to the local file)
+                       - Any media files from ./docs/updates/media/YYYY-MM-DD/
+                       - The tool will automatically handle branch creation, file uploads, docs.json updates, and PR creation
 
-                    Use only the configured GitHub MCP server for all Git actions. Do not clone the repository. Do not use the CLI.
+                    The create_changelog_pr tool is deterministic and handles the entire workflow:
+                    - Creates a new branch
+                    - Uploads the changelog file to docs/updates/YYYY/MM/DD/changelog.mdx
+                    - Uploads media files to docs/images/changelog/YYYY-MM-DD/
+                    - Updates docs.json with the new changelog entry
+                    - Creates a draft PR with proper formatting
+
+                    Do not use the CLI. Use only the configured github_changelog tools.
 
                     <changelog_template>
-                    {open('changelog_template.md').read()}
+                        {open('./prompts/changelog_template.md').read()}
                     </changelog_template>
                 """,
                 model="haiku",
-                tools=[
-                    "mcp__github__create_pull_request",
-                    "mcp__github__create_branch",
-                    "mcp__github__list_branches",
-                    "mcp__github__list_commits",
-                    "mcp__github__push_files",
-                    "mcp__github__update_pull_request",
-                    "mcp__mintlify__SearchMintlify",
-                    "Read(./docs/updates/**)",
-                    "Edit(./docs/updates/**)",
-                    "WebSearch",
-                ],
+                tools=permission_groups["pr_writer"],
             ),
         },
         system_prompt="You are an expert developer relations professional.",
@@ -132,26 +164,11 @@ async def main():
         setting_sources=["local"],
         mcp_servers=MCP_SERVERS,
     )
+    async with ClaudeSDKClient(options=options) as client:
+        await client.query(prompt=USER_PROMPT)
 
-    async for message in query(
-        prompt=PROMPT,
-        options=options,
-    ):
-        if isinstance(message, AssistantMessage):
-            for block in message.content:
-                if isinstance(block, TextBlock):
-                    print(f"Claude: {block.text}")
-        if isinstance(message, SystemMessage):
-            print(message.data)
-        elif (
-            isinstance(message, ResultMessage)
-            and message.total_cost_usd
-            and message.total_cost_usd > 0
-        ):
-            print(f"\nCost: ${message.total_cost_usd:.4f}")
-        else:
-            print(message)
-    print()
+        async for message in client.receive_response():
+            display_message(message)
 
 
 asyncio.run(main())

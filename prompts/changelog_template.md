@@ -1,11 +1,8 @@
----
-title: [Date in format MMMM, DD YYYY, e.g. October 17th, 2025]
+title: []
 description: 2 min read
-'og:image': /images/og-image-changelog.png
-'twitter:image': /images/og-image-changelog.png
 ---
 
-import { AuthorCard } from '/snippets/author-card.mdx';
+import {{ AuthorCard }} from '/snippets/author-card.mdx';
 
 <AuthorCard/>
 

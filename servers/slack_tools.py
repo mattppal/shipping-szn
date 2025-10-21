@@ -7,6 +7,7 @@ import logging
 import mimetypes
 import os
 import re
+from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -15,12 +16,18 @@ from claude_agent_sdk import tool
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
+load_dotenv()
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+SLACK_TOKEN = os.getenv("SLACK_TOKEN")
+if not SLACK_TOKEN:
+    raise ValueError("SLACK_TOKEN is not set")
+
 # Initialize Slack client
-slack_client = WebClient(token=os.getenv("SLACK_MCP_TOKEN"))
+slack_client = WebClient(token=SLACK_TOKEN)
 
 # Configuration
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
@@ -56,7 +63,7 @@ def download_media_file(url: str, description: str = "") -> Optional[Dict]:
     try:
         # Slack's url_private already includes authentication
         # Just add the Authorization header as backup
-        headers = {"Authorization": f"Bearer {os.getenv('SLACK_MCP_TOKEN')}"}
+        headers = {"Authorization": f"Bearer {SLACK_TOKEN}"}
         response = requests.get(url, headers=headers, allow_redirects=True)
         response.raise_for_status()
 
@@ -269,7 +276,11 @@ async def fetch_messages_from_channel(args: dict[str, Any]) -> dict[str, Any]:
             if msg.get("processed_files"):
                 summary += f"   📎 Files ({len(msg['processed_files'])}):\n"
                 for file in msg["processed_files"]:
-                    file_type = "🖼️ Image" if file.get("is_image") else "🎥 Video" if file.get("is_video") else "📄 File"
+                    file_type = (
+                        "🖼️ Image"
+                        if file.get("is_image")
+                        else "🎥 Video" if file.get("is_video") else "📄 File"
+                    )
                     summary += f"      {file_type}: {file['filename']}\n"
                     summary += f"        Path: {file['local_path']}\n"
 
