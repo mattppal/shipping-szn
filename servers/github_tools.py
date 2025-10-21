@@ -304,21 +304,6 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
         # 1. Upload media files if provided
         media_files = args.get("media_files", [])
 
-        # Handle media_files being passed as JSON string (from agent)
-        if isinstance(media_files, str):
-            try:
-                media_files = json.loads(media_files)
-            except json.JSONDecodeError:
-                return {
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": f"Error: media_files must be a list or valid JSON array string. Got invalid JSON string: {repr(media_files[:100])}...",
-                        }
-                    ],
-                    "is_error": True,
-                }
-
         # Validate media_files is a list
         if media_files and not isinstance(media_files, list):
             return {
