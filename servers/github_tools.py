@@ -1,5 +1,6 @@
 """Simple, standalone GitHub tools for Claude Agent SDK."""
 
+import asyncio
 import json
 import logging
 import os
@@ -99,6 +100,55 @@ This PR is created as a draft to allow for human review before publishing.
 """
 
 
+async def upload_media_file(repo, local_path: str, date_str: str, branch_name: str) -> Optional[str]:
+    """Upload a single media file to the repository.
+
+    Args:
+        repo: GitHub repository object
+        local_path: Local file path to upload
+        date_str: Date string in format YYYY-MM-DD
+        branch_name: Target branch name
+
+    Returns:
+        Remote path if successful, None otherwise
+    """
+    try:
+        # Validate file exists and is a file
+        if not os.path.exists(local_path):
+            logger.error(f"Media file not found: {local_path}")
+            return None
+
+        if not os.path.isfile(local_path):
+            logger.error(f"Path is not a file: {local_path}")
+            return None
+
+        with open(local_path, "rb") as f:
+            file_content = f.read()
+
+        # Determine remote path: images/changelog/YYYY-MM-DD/filename
+        filename = os.path.basename(local_path)
+        remote_path = f"docs/images/changelog/{date_str}/{filename}"
+
+        # GitHub API calls are synchronous, so we run them in an executor
+        # to avoid blocking the event loop
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None,
+            lambda: repo.create_file(
+                path=remote_path,
+                message=f"Add media file for changelog {date_str}",
+                content=file_content,
+                branch=branch_name,
+            )
+        )
+
+        logger.info(f"Uploaded media: {remote_path}")
+        return remote_path
+    except Exception as e:
+        logger.error(f"Error uploading media file {local_path}: {str(e)}")
+        return None
+
+
 def update_docs_json_content(docs_content: str, year: str, month: str, day: str) -> str:
     """Update docs.json content with new changelog entry.
 
@@ -114,19 +164,46 @@ def update_docs_json_content(docs_content: str, year: str, month: str, day: str)
     # Create new changelog entry path
     new_entry = f"updates/{year}/{month}/{day}/changelog"
 
-    # For now, we'll create a simple structure
-    # In production, you might want to scan existing changelogs
-    all_changelogs = [
-        {
-            "year": year,
-            "month": month,
-            "day": day,
-            "path": new_entry,
-        }
-    ]
+    # Extract all existing changelog entries from the current docs.json
+    all_changelogs = []
+
+    # Find the Changelog anchor and extract existing entries
+    changelog_anchor = None
+    for anchor in docs_data.get("navigation", {}).get("anchors", []):
+        if anchor.get("anchor") == "Changelog":
+            changelog_anchor = anchor
+            # Parse existing groups and pages
+            for group in anchor.get("groups", []):
+                for page_path in group.get("pages", []):
+                    # Extract date from path: updates/YYYY/MM/DD/changelog
+                    match = re.match(r"updates/(\d{4})/(\d{2})/(\d{2})/changelog", page_path)
+                    if match:
+                        all_changelogs.append({
+                            "year": match.group(1),
+                            "month": match.group(2),
+                            "day": match.group(3),
+                            "path": page_path,
+                        })
+            break
+
+    # Add the new changelog entry
+    all_changelogs.append({
+        "year": year,
+        "month": month,
+        "day": day,
+        "path": new_entry,
+    })
+
+    # Remove duplicates (in case the entry already exists)
+    unique_changelogs = []
+    seen_paths = set()
+    for cl in all_changelogs:
+        if cl["path"] not in seen_paths:
+            unique_changelogs.append(cl)
+            seen_paths.add(cl["path"])
 
     # Sort changelogs by date (newest first)
-    all_changelogs.sort(
+    unique_changelogs.sort(
         key=lambda x: (
             -int(x["year"]),
             -int(x["month"]),
@@ -134,26 +211,25 @@ def update_docs_json_content(docs_content: str, year: str, month: str, day: str)
         )
     )
 
-    # Group changelogs by month and year
-    grouped_changelogs = {}
-    for cl in all_changelogs:
+    # Group changelogs by month and year (maintaining order)
+    from collections import OrderedDict
+    grouped_changelogs = OrderedDict()
+    for cl in unique_changelogs:
         month_name = datetime.strptime(cl["month"], "%m").strftime("%B")
         group_key = f"{month_name} {cl['year']}"
         if group_key not in grouped_changelogs:
             grouped_changelogs[group_key] = []
         grouped_changelogs[group_key].append(cl["path"])
 
-    # Find the Changelog anchor and update it
-    for anchor in docs_data.get("navigation", {}).get("anchors", []):
-        if anchor.get("anchor") == "Changelog":
-            anchor["icon"] = "clock-rotate-left"
-            anchor["description"] = "Latest updates and changes"
-            anchor["groups"] = []
+    # Update the Changelog anchor with all entries (existing + new)
+    if changelog_anchor:
+        changelog_anchor["icon"] = "clock-rotate-left"
+        changelog_anchor["description"] = "Latest updates and changes"
+        changelog_anchor["groups"] = []
 
-            # Add each month group
-            for group_name, pages in grouped_changelogs.items():
-                anchor["groups"].append({"group": group_name, "pages": pages})
-            break
+        # Add each month group (maintaining sorted order with newest first)
+        for group_name, pages in grouped_changelogs.items():
+            changelog_anchor["groups"].append({"group": group_name, "pages": pages})
 
     return json.dumps(docs_data, indent=2)
 
@@ -319,36 +395,19 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
         media_count = 0
         if media_files:
             logger.info(f"Processing {len(media_files)} media files: {media_files}")
-            for local_path in media_files:
-                try:
-                    # Validate file exists and is a file
-                    if not os.path.exists(local_path):
-                        logger.error(f"Media file not found: {local_path}")
-                        continue
 
-                    if not os.path.isfile(local_path):
-                        logger.error(f"Path is not a file: {local_path}")
-                        continue
+            # Upload all media files in parallel
+            upload_tasks = [
+                upload_media_file(repo, local_path, date_str, branch_name)
+                for local_path in media_files
+            ]
+            upload_results = await asyncio.gather(*upload_tasks)
 
-                    with open(local_path, "rb") as f:
-                        file_content = f.read()
-
-                    # Determine remote path: images/changelog/YYYY-MM-DD/filename
-                    filename = os.path.basename(local_path)
-                    remote_path = f"docs/images/changelog/{date_str}/{filename}"
-
-                    repo.create_file(
-                        path=remote_path,
-                        message=f"Add media file for changelog {date_str}",
-                        content=file_content,
-                        branch=branch_name,
-                    )
+            # Track successful uploads
+            for remote_path in upload_results:
+                if remote_path:  # Only count successful uploads (not None)
                     uploaded_files.append(remote_path)
                     media_count += 1
-                    logger.info(f"Uploaded media: {remote_path}")
-                except Exception as e:
-                    logger.error(f"Error uploading media file {local_path}: {str(e)}")
-                    # Continue with other files
 
         # 2. Create changelog file
         changelog_remote_path = f"docs/updates/{year}/{month}/{day}/changelog.mdx"
