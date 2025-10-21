@@ -1,11 +1,3 @@
-# Workflow:
-# 1. Fetch updates from slack (easy) [future: linear, github]
-# 2. Research the updates to understand context
-# 3. Fetch images from slack (N/A)
-# 4. Draft PR using our brand guidelines and changelog format
-# 5. Review the PR to match our tone
-# 6. Review the PR to check for devex errors, etc.
-
 import asyncio
 import os
 from dotenv import load_dotenv
@@ -144,6 +136,10 @@ async def main():
                     - SearchReplit: Find relevant documentation links
                     - WebSearch: Search the web for additional context
 
+                    <changelog_criteria>
+                        {open('./prompts/good_docs.md').read()}
+                    </changelog_criteria>
+
                 """,
                 model="sonnet",
                 tools=permission_groups["changelog_writer"],
@@ -173,6 +169,14 @@ async def main():
                     <changelog_template>
                         {open('./prompts/changelog_template.md').read()}
                     </changelog_template>
+
+                    <brand_guidelines>
+                        {open('./prompts/brand_guidelines.md').read()}
+                    </brand_guidelines>
+
+                    <docs_style_guide>
+                        {open('./prompts/docs_style_guide.md').read()}
+                    </docs_style_guide>
                 """,
                 model="haiku",
                 tools=permission_groups["pr_writer"],
@@ -182,7 +186,7 @@ async def main():
         permission_mode="bypassPermissions",
         model=os.getenv("ORCHESTRATOR_MODEL"),
         cwd="./",
-        setting_sources=["local"],
+        setting_sources=None,
         mcp_servers=MCP_SERVERS,
     )
     async with ClaudeSDKClient(options=options) as client:
