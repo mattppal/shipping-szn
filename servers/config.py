@@ -24,7 +24,9 @@ MCP_SERVERS = {
         type="http",
         url="https://docs.replit.com/mcp",
     ),
-    "slack": create_sdk_mcp_server(name="slack", tools=[fetch_messages_from_channel]),
+    "slack_updates": create_sdk_mcp_server(
+        name="slack_updates", tools=[fetch_messages_from_channel]
+    ),
     "github_changelog": create_sdk_mcp_server(
         name="github_changelog",
         tools=[create_changelog_pr],

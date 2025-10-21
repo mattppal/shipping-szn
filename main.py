@@ -28,7 +28,7 @@ permissions = {
     "update_pull_request": "mcp__github__update_pull_request",
     "search_mintlify": "mcp__mintlify__SearchMintlify",
     "search_replit": "mcp__replit__SearchReplit",
-    "fetch_messages_from_channel": "mcp__slack__fetch_messages_from_channel",
+    "fetch_messages_from_channel": "mcp__slack_updates__fetch_messages_from_channel",
 }
 
 permission_groups = {
@@ -139,7 +139,7 @@ async def main():
                     - fetch_messages_from_channel: Fetch messages with all media and threads from a Slack channel
                     - SearchReplit: Find relevant documentation links
                     - WebSearch: Search the web for additional context
-                    
+
                 """,
                 model="sonnet",
                 tools=permission_groups["changelog_writer"],
