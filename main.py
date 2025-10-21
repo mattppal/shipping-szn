@@ -16,14 +16,10 @@ load_dotenv()
 
 permissions = {
     # read/write/edit/glob docs and media
-    "read_docs": "Read(./docs/**)",
-    "write_docs": "Write(./docs/**)",
-    "edit_docs": "Edit(./docs/**)",
-    "glob_docs": "Glob(./docs/**)",
-    "read_media": "Read(./docs/updates/media/**)",
-    "write_media": "Write(./docs/updates/media/**)",
-    "edit_media": "Edit(./docs/updates/media/**)",
-    "glob_media": "Glob(./docs/updates/media/**)",
+    "read_docs": "Read(./docs/**/*)",
+    "write_docs": "Write(./docs/**/*)",
+    "edit_docs": "Edit(./docs/**/*)",
+    "glob_docs": "Glob(./docs/**/*)",
     # search tools
     "web_search": "WebSearch",
     "search_mintlify": "mcp__mintlify__SearchMintlify",
@@ -37,10 +33,6 @@ permissions = {
 
 permission_groups = {
     "review_and_feedback": [
-        permissions["read_media"],
-        permissions["write_media"],
-        permissions["edit_media"],
-        permissions["glob_media"],
         permissions["read_docs"],
         permissions["edit_docs"],
         permissions["web_search"],
@@ -52,9 +44,6 @@ permission_groups = {
         permissions["read_docs"],
         permissions["write_docs"],
         permissions["edit_docs"],
-        permissions["write_media"],
-        permissions["edit_media"],
-        permissions["glob_media"],
         permissions["search_replit"],
         permissions["web_search"],
     ],
@@ -67,10 +56,6 @@ permission_groups = {
         permissions["write_docs"],
         permissions["edit_docs"],
         permissions["glob_docs"],
-        permissions["read_media"],
-        permissions["write_media"],
-        permissions["edit_media"],
-        permissions["glob_media"],
     ],
 }
 

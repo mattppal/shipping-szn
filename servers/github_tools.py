@@ -167,14 +167,34 @@ def update_docs_json_content(docs_content: str, year: str, month: str, day: str)
     name="create_changelog_pr",
     description="Create a GitHub PR with a changelog file. Handles branch creation, file uploads (changelog + media), docs.json updates, and PR creation. Provide either the local path to the changelog file OR the markdown content directly. Media files should be provided as a list of local file paths.",
     input_schema={
-        "changelog_path": str,  # Local path to changelog file (e.g., ./docs/updates/2025-01-15.md)
-        "changelog_content": str,  # OR provide markdown content directly (optional if changelog_path provided)
-        "media_files": list[
-            str
-        ],  # List of local file paths to media files to upload (optional)
-        "date_override": str,  # Override date detection (format: YYYY-MM-DD) (optional)
-        "pr_title": str,  # Custom PR title (optional, will be auto-generated if not provided)
-        "draft": bool,  # Create as draft PR (default: True)
+        "type": "object",
+        "properties": {
+            "changelog_path": {
+                "type": "string",
+                "description": "Local path to changelog file (e.g., ./docs/updates/2025-01-15.md)",
+            },
+            "changelog_content": {
+                "type": "string",
+                "description": "OR provide markdown content directly (optional if changelog_path provided)",
+            },
+            "media_files": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "List of local file paths to media files to upload (optional)",
+            },
+            "date_override": {
+                "type": "string",
+                "description": "Override date detection (format: YYYY-MM-DD) (optional)",
+            },
+            "pr_title": {
+                "type": "string",
+                "description": "Custom PR title (optional, will be auto-generated if not provided)",
+            },
+            "draft": {
+                "type": "boolean",
+                "description": "Create as draft PR (default: True)",
+            },
+        },
     },
 )
 async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
@@ -283,6 +303,21 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
 
         # 1. Upload media files if provided
         media_files = args.get("media_files", [])
+
+        # Handle media_files being passed as JSON string (from agent)
+        if isinstance(media_files, str):
+            try:
+                media_files = json.loads(media_files)
+            except json.JSONDecodeError:
+                return {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"Error: media_files must be a list or valid JSON array string. Got invalid JSON string: {repr(media_files[:100])}...",
+                        }
+                    ],
+                    "is_error": True,
+                }
 
         # Validate media_files is a list
         if media_files and not isinstance(media_files, list):
