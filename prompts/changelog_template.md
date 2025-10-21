@@ -18,6 +18,8 @@ import {{ AuthorCard }} from '/snippets/author-card.mdx';
 
 ### [Update 1]
 
+![/path/to/image1.png](Image metadata)
+
 [Description using guidlines from docs repo]
 
 ### [Update 2]
@@ -25,6 +27,8 @@ import {{ AuthorCard }} from '/snippets/author-card.mdx';
 [Description using guidlines from docs repo]
 
 ### [Update 3]
+
+![/path/to/image3.png](Image metadata)
 
 [Description using guidlines from docs repo]
 
