@@ -19,6 +19,10 @@ permissions = {
     "write_docs": "Write(./docs/**)",
     "edit_docs": "Edit(./docs/**)",
     "glob_docs": "Glob(./docs/**)",
+    "read_media": "Read(./docs/updates/media/**)",
+    "write_media": "Write(./docs/updates/media/**)",
+    "edit_media": "Edit(./docs/updates/media/**)",
+    "glob_media": "Glob(./docs/updates/media/**)",
     "web_search": "WebSearch",
     "create_changelog_pr": "mcp__github_changelog__create_changelog_pr",
     "update_pull_request": "mcp__github__update_pull_request",
@@ -29,6 +33,10 @@ permissions = {
 
 permission_groups = {
     "review_and_feedback": [
+        permissions["read_media"],
+        permissions["write_media"],
+        permissions["edit_media"],
+        permissions["glob_media"],
         permissions["read_docs"],
         permissions["edit_docs"],
         permissions["web_search"],
@@ -40,6 +48,9 @@ permission_groups = {
         permissions["read_docs"],
         permissions["write_docs"],
         permissions["edit_docs"],
+        permissions["write_media"],
+        permissions["edit_media"],
+        permissions["glob_media"],
         permissions["search_replit"],
         permissions["web_search"],
     ],
@@ -52,6 +63,10 @@ permission_groups = {
         permissions["write_docs"],
         permissions["edit_docs"],
         permissions["glob_docs"],
+        permissions["read_media"],
+        permissions["write_media"],
+        permissions["edit_media"],
+        permissions["glob_media"],
     ],
 }
 
@@ -93,6 +108,7 @@ async def main():
                     Provide specific, actionable suggestions and, when appropriate, propose improved wording.
                     Check that: brand voice is consistent, technical claims are accurate, links work and are relative, and entries include necessary context.
                     Return a concise list of recommendations and, if asked, an edited version of the text.
+                    Assume all details are correct and start work.
                 """,
                 model="haiku",
                 tools=[
@@ -123,6 +139,7 @@ async def main():
                     - fetch_messages_from_channel: Fetch messages with all media and threads from a Slack channel
                     - SearchReplit: Find relevant documentation links
                     - WebSearch: Search the web for additional context
+                    
                 """,
                 model="sonnet",
                 tools=permission_groups["changelog_writer"],

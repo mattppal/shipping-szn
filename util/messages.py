@@ -36,5 +36,5 @@ def display_message(msg):
         print("Result ended")
         if msg.total_cost_usd:
             print(f"Cost: ${msg.total_cost_usd:.6f}")
-    else:
-        print(msg)
+    # else:
+    #     print(msg)

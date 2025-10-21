@@ -1,8 +1,4 @@
-"""Simple, standalone GitHub tools for Claude Agent SDK.
-
-All GitHub functionality in one file - no complex imports or nested modules.
-Focused on creating changelog PRs with proper formatting and media handling.
-"""
+"""Simple, standalone GitHub tools for Claude Agent SDK."""
 
 import json
 import logging
@@ -173,7 +169,9 @@ def update_docs_json_content(docs_content: str, year: str, month: str, day: str)
     input_schema={
         "changelog_path": str,  # Local path to changelog file (e.g., ./docs/updates/2025-01-15.md)
         "changelog_content": str,  # OR provide markdown content directly (optional if changelog_path provided)
-        "media_files": list,  # List of local file paths to media files to upload (optional)
+        "media_files": list[
+            str
+        ],  # List of local file paths to media files to upload (optional)
         "date_override": str,  # Override date detection (format: YYYY-MM-DD) (optional)
         "pr_title": str,  # Custom PR title (optional, will be auto-generated if not provided)
         "draft": bool,  # Create as draft PR (default: True)
@@ -285,10 +283,33 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
 
         # 1. Upload media files if provided
         media_files = args.get("media_files", [])
+
+        # Validate media_files is a list
+        if media_files and not isinstance(media_files, list):
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": f"Error: media_files must be a list, got {type(media_files).__name__}. Value: {repr(media_files)}",
+                    }
+                ],
+                "is_error": True,
+            }
+
         media_count = 0
         if media_files:
+            logger.info(f"Processing {len(media_files)} media files: {media_files}")
             for local_path in media_files:
                 try:
+                    # Validate file exists and is a file
+                    if not os.path.exists(local_path):
+                        logger.error(f"Media file not found: {local_path}")
+                        continue
+
+                    if not os.path.isfile(local_path):
+                        logger.error(f"Path is not a file: {local_path}")
+                        continue
+
                     with open(local_path, "rb") as f:
                         file_content = f.read()
 

@@ -1,15 +1,15 @@
-"""Simple, standalone Slack tools for Claude Agent SDK.
+"""Simple, standalone Slack tools for Claude Agent SDK."""
 
-All Slack functionality in one file - no complex imports or nested modules.
-"""
-
+import hashlib
 import logging
 import mimetypes
 import os
-import re
-from dotenv import load_dotenv
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
+
+from dotenv import load_dotenv
+from slugify import slugify
 
 import requests
 from claude_agent_sdk import tool
@@ -32,6 +32,7 @@ slack_client = WebClient(token=SLACK_TOKEN)
 # Configuration
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
 MEDIA_BASE_DIR = "./docs/updates/media"
+MAX_CONCURRENT_DOWNLOADS = 5  # Maximum parallel downloads
 
 
 # ============================================================================
@@ -39,23 +40,39 @@ MEDIA_BASE_DIR = "./docs/updates/media"
 # ============================================================================
 
 
-def slugify(text: str) -> str:
-    """Convert text to a URL-friendly slug."""
-    text = text.lower().strip()
-    text = re.sub(r"[^\w\s-]", "", text)
-    text = re.sub(r"[-\s]+", "-", text)
-    words = text.split("-")
-    slug = ""
-    for word in words:
-        if len(slug) + len(word) + 1 <= 50:
-            slug = f"{slug}-{word}" if slug else word
-        else:
-            break
-    return slug or "media"
+def sanitize_filename(filename: str) -> str:
+    """Sanitize filename for safe filesystem usage using slugify.
+
+    Uses python-slugify library for robust, standardized sanitization.
+    """
+    if not filename:
+        return "media"
+
+    # Split into name and extension
+    if "." in filename:
+        name, ext = filename.rsplit(".", 1)
+        ext = slugify(ext[:10])  # Slugify and limit extension
+    else:
+        name = filename
+        ext = ""
+
+    # Slugify the name (handles unicode, special chars, spaces, etc.)
+    # max_length=40 to keep filenames reasonable
+    name = slugify(name, max_length=40) or "media"
+
+    return f"{name}.{ext}" if ext else name
 
 
-def download_media_file(url: str, description: str = "") -> Optional[Dict]:
+def download_media_file(
+    url: str, filename: str = "", file_id: str = "", skip_existing: bool = True
+) -> Optional[Dict]:
     """Download media file from Slack.
+
+    Args:
+        url: The URL to download from
+        filename: The filename to use (should come from Slack's file.name field)
+        file_id: Slack file ID for stable identification (URLs contain changing tokens)
+        skip_existing: If True, skip download if file already exists (default: True)
 
     Note: Slack's url_private already contains the token as a query parameter,
     so we don't need to add Authorization headers.
@@ -64,59 +81,71 @@ def download_media_file(url: str, description: str = "") -> Optional[Dict]:
         # Slack's url_private already includes authentication
         # Just add the Authorization header as backup
         headers = {"Authorization": f"Bearer {SLACK_TOKEN}"}
-        response = requests.get(url, headers=headers, allow_redirects=True)
-        response.raise_for_status()
 
-        content_type = response.headers.get("content-type", "")
+        # Sanitize the filename for safe filesystem usage
+        sanitized_name = sanitize_filename(filename)
 
-        # Get base filename from description and slugify it
-        base_filename = slugify(description) if description else "media"
+        # Create a unique hash from the file ID (stable) or URL (fallback)
+        # File ID is stable, URL contains tokens that change
+        hash_source = file_id if file_id else url
+        file_hash = hashlib.sha256(hash_source.encode()).hexdigest()[:12]
 
-        # If slugify resulted in empty string, use default
-        if not base_filename:
-            base_filename = "media"
-
-        # Get extension from content type
-        extension = mimetypes.guess_extension(content_type) or ""
-        if extension and extension.startswith("."):
-            extension = extension[1:]  # Remove leading dot
-
-        # Limit base filename length to ensure total path length is reasonable
-        max_base_length = 50
-        if len(base_filename) > max_base_length:
-            base_filename = base_filename[:max_base_length].rstrip("-")
-
-        # Add timestamp to ensure uniqueness
-        timestamp = datetime.now().strftime("%H%M%S")
-        filename = (
-            f"{base_filename}-{timestamp}.{extension}"
-            if extension
-            else f"{base_filename}-{timestamp}"
-        )
-
-        size_bytes = len(response.content)
-
-        if size_bytes > MAX_FILE_SIZE:
-            logger.warning(f"File {filename} exceeds size limit")
-            return None
+        # Split name and extension
+        if "." in sanitized_name:
+            name_base, ext = sanitized_name.rsplit(".", 1)
+            unique_filename = f"{name_base}_{file_hash}.{ext}"
+        else:
+            unique_filename = f"{sanitized_name}_{file_hash}"
 
         # Save to disk with date-based directory
         date_str = datetime.now().strftime("%Y-%m-%d")
         media_dir = os.path.join(MEDIA_BASE_DIR, date_str)
         os.makedirs(media_dir, exist_ok=True)
 
-        local_path = os.path.join(media_dir, filename)
+        local_path = os.path.join(media_dir, unique_filename)
+
+        # Check if file already exists
+        if skip_existing and os.path.exists(local_path):
+            existing_size = os.path.getsize(local_path)
+            logger.info(f"⏭️  Skipping download, file already exists: {unique_filename}")
+
+            # Get content type from existing file
+            content_type, _ = mimetypes.guess_type(unique_filename)
+            content_type = content_type or "application/octet-stream"
+
+            return {
+                "content": None,  # Don't load content for existing files
+                "filename": unique_filename,
+                "mimetype": content_type,
+                "local_path": local_path,
+                "size": existing_size,
+                "skipped": True,
+            }
+
+        # File doesn't exist or skip_existing is False, proceed with download
+        response = requests.get(url, headers=headers, allow_redirects=True)
+        response.raise_for_status()
+
+        size_bytes = len(response.content)
+
+        if size_bytes > MAX_FILE_SIZE:
+            logger.warning(f"File {unique_filename} exceeds size limit")
+            return None
+
+        # Write file to disk
         with open(local_path, "wb") as f:
             f.write(response.content)
 
-        logger.info(f"Downloaded: {filename} ({size_bytes} bytes)")
+        content_type = response.headers.get("content-type", "application/octet-stream")
+        logger.info(f"✅ Downloaded: {unique_filename} ({size_bytes} bytes)")
 
         return {
             "content": response.content,
-            "filename": filename,
+            "filename": unique_filename,
             "mimetype": content_type,
             "local_path": local_path,
             "size": size_bytes,
+            "skipped": False,
         }
 
     except Exception as e:
@@ -145,34 +174,81 @@ def get_thread_replies(channel_id: str, thread_ts: str) -> List[Dict]:
         return []
 
 
-def process_message_files(files: List[Dict], message_text: str) -> List[Dict]:
-    """Download and process files attached to a message."""
+def _download_single_file(file: Dict, skip_existing: bool) -> Optional[Dict]:
+    """Helper function to download a single file (used for parallel downloads)."""
+    if not file.get("url_private"):
+        return None
+
+    # Use the Slack filename directly (will be sanitized in download_media_file)
+    filename = file.get("name", "")
+    media_data = download_media_file(
+        file["url_private"], filename, skip_existing=skip_existing
+    )
+
+    if media_data:
+        return {
+            "original_name": file.get("name"),
+            "filename": media_data["filename"],
+            "local_path": media_data["local_path"],
+            "mimetype": media_data["mimetype"],
+            "size": media_data["size"],
+            "is_image": file.get("mimetype", "").startswith("image/"),
+            "is_video": file.get("mimetype", "").startswith("video/"),
+            "skipped": media_data.get("skipped", False),
+        }
+    return None
+
+
+def process_message_files(
+    files: List[Dict],
+    skip_existing: bool = True,
+    max_workers: int = MAX_CONCURRENT_DOWNLOADS,
+) -> List[Dict]:
+    """Download and process files attached to a message in parallel.
+
+    Args:
+        files: List of file dictionaries from Slack API
+        skip_existing: If True, skip downloading files that already exist
+        max_workers: Maximum number of concurrent downloads (default: MAX_CONCURRENT_DOWNLOADS)
+    """
+    if not files:
+        return []
+
+    start_time = datetime.now()
     processed_files = []
-    for file in files:
-        if not file.get("url_private"):
-            continue
 
-        media_text = file.get("title") or file.get("name") or message_text
-        media_data = download_media_file(file["url_private"], media_text)
+    # Use ThreadPoolExecutor for parallel downloads
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all download tasks
+        future_to_file = {
+            executor.submit(_download_single_file, file, skip_existing): file
+            for file in files
+        }
 
-        if media_data:
-            processed = {
-                "original_name": file.get("name"),
-                "filename": media_data["filename"],
-                "local_path": media_data["local_path"],
-                "mimetype": media_data["mimetype"],
-                "size": media_data["size"],
-                "is_image": file.get("mimetype", "").startswith("image/"),
-                "is_video": file.get("mimetype", "").startswith("video/"),
-            }
-            processed_files.append(processed)
+        # Collect results as they complete
+        for future in as_completed(future_to_file):
+            try:
+                result = future.result()
+                if result:
+                    processed_files.append(result)
+            except Exception as e:
+                file = future_to_file[future]
+                logger.error(
+                    f"Error downloading file {file.get('name', 'unknown')}: {str(e)}"
+                )
+
+    elapsed = (datetime.now() - start_time).total_seconds()
+    if processed_files:
+        logger.info(
+            f"Processed {len(processed_files)} files in {elapsed:.2f}s (parallel with {max_workers} workers)"
+        )
 
     return processed_files
 
 
 @tool(
     name="fetch_messages_from_channel",
-    description="Fetch messages from a Slack channel within a specified time range. Downloads all media files (images, videos) to ./docs/updates/media/YYYY-MM-DD/. Processes main messages and thread replies.",
+    description="Fetch messages from a Slack channel within a specified time range. Downloads all media files (images, videos) to ./docs/updates/media/YYYY-MM-DD/. Processes main messages and thread replies. Can skip downloading media files that already exist locally.",
     input_schema={
         "channel_id": str,
         "days_back": int,
@@ -181,8 +257,13 @@ def process_message_files(files: List[Dict], message_text: str) -> List[Dict]:
 async def fetch_messages_from_channel(args: dict[str, Any]) -> dict[str, Any]:
     """Fetch messages from a Slack channel with all media and threads.
 
+    Args:
+        channel_id: The Slack channel ID to fetch from
+        days_back: Number of days back to fetch messages (default: 7)
     Returns a dictionary with content array for Claude Agent SDK.
     """
+    skip_existing = True
+
     try:
         channel_id = args.get("channel_id")
         days_back = int(args.get("days_back", 7))
@@ -223,7 +304,7 @@ async def fetch_messages_from_channel(args: dict[str, Any]) -> dict[str, Any]:
                 # Process files in main message
                 if msg.get("files"):
                     msg["processed_files"] = process_message_files(
-                        msg["files"], msg.get("text", "")
+                        msg["files"], skip_existing=skip_existing
                     )
 
                 # Process thread replies and their files
@@ -232,7 +313,7 @@ async def fetch_messages_from_channel(args: dict[str, Any]) -> dict[str, Any]:
                     for reply in replies:
                         if reply.get("files"):
                             reply["processed_files"] = process_message_files(
-                                reply["files"], reply.get("text", "")
+                                reply["files"], skip_existing=skip_existing
                             )
                     msg["replies"] = replies
 
@@ -247,14 +328,32 @@ async def fetch_messages_from_channel(args: dict[str, Any]) -> dict[str, Any]:
         summary += f"📅 Time range: {start_time.strftime('%Y-%m-%d')} to {end_time.strftime('%Y-%m-%d')}\n\n"
 
         total_files = 0
+        skipped_files = 0
+        downloaded_files = 0
         for msg in messages:
             files_count = len(msg.get("processed_files", []))
+            for file in msg.get("processed_files", []):
+                if file.get("skipped"):
+                    skipped_files += 1
+                else:
+                    downloaded_files += 1
             if msg.get("replies"):
                 for reply in msg["replies"]:
                     files_count += len(reply.get("processed_files", []))
+                    for file in reply.get("processed_files", []):
+                        if file.get("skipped"):
+                            skipped_files += 1
+                        else:
+                            downloaded_files += 1
             total_files += files_count
 
-        summary += f"📎 Downloaded {total_files} media files to {MEDIA_BASE_DIR}\n\n"
+        summary += f"📎 Total media files: {total_files}\n"
+        if skip_existing:
+            summary += f"   ✅ Downloaded: {downloaded_files}\n"
+            summary += f"   ⏭️  Skipped (already exist): {skipped_files}\n"
+        else:
+            summary += f"   ✅ Downloaded: {downloaded_files}\n"
+        summary += f"   📁 Location: {MEDIA_BASE_DIR}\n\n"
         summary += "=" * 60 + "\n\n"
 
         # Add concise message details
@@ -281,7 +380,8 @@ async def fetch_messages_from_channel(args: dict[str, Any]) -> dict[str, Any]:
                         if file.get("is_image")
                         else "🎥 Video" if file.get("is_video") else "📄 File"
                     )
-                    summary += f"      {file_type}: {file['filename']}\n"
+                    status = "⏭️ " if file.get("skipped") else ""
+                    summary += f"      {status}{file_type}: {file['filename']}\n"
                     summary += f"        Path: {file['local_path']}\n"
 
             # Thread info
