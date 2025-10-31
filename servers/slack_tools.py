@@ -222,6 +222,7 @@ def process_message_files(
 
     start_time = datetime.now()
     processed_files = []
+    failed_files = []
 
     # Use ThreadPoolExecutor for parallel downloads
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -237,16 +238,29 @@ def process_message_files(
                 result = future.result()
                 if result:
                     processed_files.append(result)
+                else:
+                    # Track files that failed to download (returned None)
+                    file = future_to_file[future]
+                    failed_files.append(file.get("name", "unknown"))
             except Exception as e:
                 file = future_to_file[future]
+                filename = file.get("name", "unknown")
+                failed_files.append(filename)
                 logger.error(
-                    f"Error downloading file {file.get('name', 'unknown')}: {str(e)}"
+                    f"Error downloading file {filename}: {str(e)}", exc_info=True
                 )
 
     elapsed = (datetime.now() - start_time).total_seconds()
     if processed_files:
         logger.info(
-            f"Processed {len(processed_files)} files in {elapsed:.2f}s (parallel with {max_workers} workers)"
+            f"Processed {len(processed_files)}/{len(files)} files in {elapsed:.2f}s "
+            f"(parallel with {max_workers} workers)"
+        )
+    if failed_files:
+        logger.warning(
+            f"⚠️  Failed to download {len(failed_files)} file(s): "
+            f"{', '.join(failed_files[:5])}"
+            + (f" and {len(failed_files) - 5} more" if len(failed_files) > 5 else "")
         )
 
     return processed_files
