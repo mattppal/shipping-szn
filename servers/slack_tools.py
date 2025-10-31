@@ -176,13 +176,19 @@ def get_thread_replies(channel_id: str, thread_ts: str) -> List[Dict]:
 
 def _download_single_file(file: Dict, skip_existing: bool) -> Optional[Dict]:
     """Helper function to download a single file (used for parallel downloads)."""
+    file_id = file.get("id", "")
+    filename = file.get("name", "unknown")
+    
     if not file.get("url_private"):
+        logger.warning(
+            f"⚠️  File '{filename}' (ID: {file_id}) has no url_private - skipping download. "
+            "This may happen with files that require special permissions."
+        )
         return None
 
     # Use the Slack filename directly (will be sanitized in download_media_file)
-    filename = file.get("name", "")
     media_data = download_media_file(
-        file["url_private"], filename, skip_existing=skip_existing
+        file["url_private"], filename, file_id=file_id, skip_existing=skip_existing
     )
 
     if media_data:

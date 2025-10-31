@@ -679,6 +679,21 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
         # Collect all files to commit atomically
         files_to_commit: Dict[str, bytes] = {}
 
+        # Extract media file references from changelog FIRST
+        referenced_filenames = set()
+        if changelog_content:
+            date_pattern = date_str.replace("-", r"\-")
+            referenced_filenames = set(
+                re.findall(
+                    rf'/images/changelog/{date_pattern}/([^"\s)]+)',
+                    changelog_content,
+                )
+            )
+            if referenced_filenames:
+                logger.debug(
+                    f"Found {len(referenced_filenames)} media file references in changelog"
+                )
+
         # 1. Collect media files - auto-discover if not provided
         media_files = args.get("media_files", [])
 
@@ -696,16 +711,47 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
 
         # Auto-discover media files if not provided or empty
         if not media_files:
+            # First, try today's date directory
             media_dir = f"./docs/updates/media/{date_str}"
+            discovered_files = []
             if os.path.exists(media_dir) and os.path.isdir(media_dir):
-                discovered_files = []
                 for filename in os.listdir(media_dir):
                     file_path = os.path.join(media_dir, filename)
                     if os.path.isfile(file_path):
                         discovered_files.append(file_path)
-                if discovered_files:
-                    logger.debug(f"Auto-discovered {len(discovered_files)} media files")
-                    media_files = discovered_files
+
+            # If we have referenced files, search ALL date directories for missing ones
+            if referenced_filenames:
+                found_filenames = {os.path.basename(f) for f in discovered_files}
+                missing_refs = referenced_filenames - found_filenames
+
+                if missing_refs:
+                    logger.debug(
+                        f"Searching other date directories for {len(missing_refs)} missing files"
+                    )
+                    # Search all date directories in media folder
+                    media_base = "./docs/updates/media"
+                    if os.path.exists(media_base):
+                        for date_dir in os.listdir(media_base):
+                            date_dir_path = os.path.join(media_base, date_dir)
+                            if os.path.isdir(date_dir_path):
+                                for filename in os.listdir(date_dir_path):
+                                    if filename in missing_refs:
+                                        file_path = os.path.join(
+                                            date_dir_path, filename
+                                        )
+                                        if os.path.isfile(file_path):
+                                            discovered_files.append(file_path)
+                                            logger.debug(
+                                                f"Found missing file in {date_dir}: {filename}"
+                                            )
+
+            if discovered_files:
+                logger.debug(f"Auto-discovered {len(discovered_files)} media files")
+                media_files = discovered_files
+
+        # Track which referenced files we've found
+        found_referenced_files = set()
 
         media_count = 0
         if media_files:
@@ -720,41 +766,47 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
                     remote_path = f"docs/images/changelog/{date_str}/{filename}"
                     files_to_commit[remote_path] = file_content
                     media_count += 1
+                    if filename in referenced_filenames:
+                        found_referenced_files.add(filename)
                 except Exception as e:
                     logger.error(f"Error reading media file {local_path}: {str(e)}")
 
+        # Validate: Fail if changelog references files that don't exist locally
+        if referenced_filenames:
+            missing_files = referenced_filenames - found_referenced_files
+            if missing_files:
+                missing_list = ", ".join(sorted(missing_files)[:5])
+                if len(missing_files) > 5:
+                    missing_list += f" and {len(missing_files) - 5} more"
+                error_msg = (
+                    f"Error: Changelog references {len(missing_files)} media files "
+                    f"that don't exist locally: {missing_list}. "
+                    f"Please ensure all referenced media files are downloaded "
+                    f"before creating the PR."
+                )
+                return {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": error_msg,
+                        }
+                    ],
+                    "is_error": True,
+                }
+
         # 2. Add changelog file
+        if not changelog_content:
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Error: Changelog content is empty",
+                    }
+                ],
+                "is_error": True,
+            }
         changelog_remote_path = f"docs/updates/{year}/{month}/{day}/changelog.mdx"
         files_to_commit[changelog_remote_path] = changelog_content.encode("utf-8")
-
-        # Validate: Check if changelog references files that don't exist locally
-        if changelog_content:
-            # Extract media file references for this date from changelog
-            date_pattern = date_str.replace("-", r"\-")
-            media_refs = set(
-                re.findall(
-                    rf'/images/changelog/{date_pattern}/([^"\s)]+)',
-                    changelog_content,
-                )
-            )
-            # Get filenames we're actually uploading
-            uploaded_filenames = {
-                os.path.basename(path)
-                for path in files_to_commit.keys()
-                if f"images/changelog/{date_str}/" in path
-            }
-            # Find missing files
-            missing_files = media_refs - uploaded_filenames
-            if missing_files:
-                logger.warning(
-                    f"⚠️  Changelog references {len(missing_files)} media files "
-                    f"not found locally: {', '.join(sorted(missing_files)[:3])}"
-                    + (
-                        f" and {len(missing_files)-3} more"
-                        if len(missing_files) > 3
-                        else ""
-                    )
-                )
 
         # 3. Update docs.json
         try:
