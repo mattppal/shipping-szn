@@ -15,11 +15,11 @@ load_dotenv()
 
 
 permissions = {
-    # read/write/edit/glob docs and media
-    "read_docs": "Read(./docs/**/*)",
-    "write_docs": "Write(./docs/**/*)",
-    "edit_docs": "Edit(./docs/**/*)",
-    "glob_docs": "Glob(./docs/**/*)",
+    # read/write/edit/glob docs (excluding media files)
+    "read_docs": "Read(./docs/**/*.md)",
+    "write_docs": "Write(./docs/**/*.md)",
+    "edit_docs": "Edit(./docs/**/*.md)",
+    "glob_docs": "Glob(./docs/**/*.md)",
     # search tools
     "web_search": "WebSearch",
     "search_mintlify": "mcp__mintlify__SearchMintlify",
@@ -116,9 +116,8 @@ async def main():
 
                     IMPORTANT - File Access Rules:
                     - The Read tool ONLY works on FILES, not directories
-                    - Do NOT try to read directories (e.g., ./docs/updates, ./docs/updates/media)
-                    - Only read specific file paths that end in .md or other file extensions
-                    - If you try to read a directory, you will get an error
+                    - Only read .md files
+                    - Do NOT try to read directories or media files
 
                     IMPORTANT - Edit Validation:
                     - Before making any Edit tool call, verify that old_string and new_string are DIFFERENT
@@ -157,9 +156,8 @@ async def main():
 
                     CRITICAL - File Access Rules:
                     - The Read tool ONLY works on FILES, not directories
-                    - Do NOT try to read directories (e.g., ./docs/updates, ./docs/updates/media/2025-10-31)
                     - Only read the specific file path: ./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md
-                    - If you try to read a directory, you will get an error
+                    - Do NOT try to read directories or media files
 
                     Your task:
                     1. Read the raw changelog content from ./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md (created by changelog_writer)
@@ -248,10 +246,8 @@ async def main():
 
                     IMPORTANT - File Access Rules:
                     - The Read tool ONLY works on FILES, not directories
-                    - Do NOT try to read directories (e.g., ./docs/updates, ./docs/updates/media)
-                    - Only read specific file paths that end in .md or other file extensions
-                    - If you need to review today's changelog, read: ./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md
-                    - If you try to read a directory, you will get an error
+                    - Only read .md files (e.g., ./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md)
+                    - Do NOT try to read directories or media files
 
                     IMPORTANT - Edit Validation:
                     - Before making any Edit tool call, verify that old_string and new_string are DIFFERENT
@@ -304,8 +300,7 @@ async def main():
                     Use create_changelog_pr to create the complete PR with:
                        - The formatted changelog content (or path to the local file, e.g., ./docs/updates/YYYY-MM-DD.md)
                        - DO NOT manually specify media_files parameter - the tool automatically discovers all files in ./docs/updates/media/YYYY-MM-DD/
-                       - DO NOT try to read directories or enumerate files yourself - the tool handles all file discovery
-                       - The Read tool only works on FILES, not directories - do not attempt to read paths like ./docs/updates/media/
+                       - DO NOT try to read directories or media files - the tool handles all file discovery
                        - The tool will automatically handle branch creation, file uploads, docs.json updates, and PR creation
 
                     The create_changelog_pr tool is deterministic and handles the entire workflow:
