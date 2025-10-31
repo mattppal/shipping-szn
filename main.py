@@ -104,31 +104,15 @@ async def main():
                     Time window: {(datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')} to {datetime.now().strftime('%Y-%m-%d')}
                     Slack channel ID: {os.getenv('SLACK_CHANNEL_ID')}
 
-                    Requirements:
-                    - Use fetch_messages_from_channel tool with channel_id and days_back=7 to fetch messages
-                    - Extract product changes, summarize crisply, and group logically
-                    - Include the originating Slack message URL (permalink) for each entry as a citation
-                    - Create a local file at ./docs/updates/YYYY-MM-DD.md (today's date)
-                    - Augment entries with relevant Replit docs links using relative paths (no absolute URLs)
-                    - Write directly to ./docs/updates/ (no temp folders)
-                    - Focus on content quality, completeness, and accuracy
-                    - Don't worry about exact template structure - template_formatter will handle that
-
-                    IMPORTANT - File Access Rules:
-                    - The Read tool ONLY works on FILES, not directories
-                    - Only read .md files
-                    - Do NOT try to read directories or media files
-
-                    IMPORTANT - Edit Validation:
-                    - Before making any Edit tool call, verify that old_string and new_string are DIFFERENT
-                    - Never make an edit where the old and new strings are identical
-                    - If content doesn't need changing, skip the edit - don't make a no-op edit
-                    - Only make edits that actually change the content
-
-                    Tools available:
-                    - fetch_messages_from_channel: Fetch messages with all media and threads from a Slack channel
-                    - SearchReplit: Find relevant documentation links
-                    - WebSearch: Search the web for additional context
+                    Process:
+                    1. Use fetch_messages_from_channel (channel_id, days_back=7) to fetch Slack messages
+                    2. Extract product changes, summarize crisply, group logically
+                    3. Include Slack message permalink for each entry
+                    4. Create ./docs/updates/YYYY-MM-DD.md (today's date)
+                    5. Add relevant Replit docs links (relative paths only)
+                    6. Focus on content quality - template_formatter handles structure
+                    
+                    Rules: Only read/write .md files. Only make edits that change content.
 
                     <changelog_criteria>
                         {open('./prompts/good_docs.md').read()}
@@ -149,75 +133,25 @@ async def main():
             "template_formatter": AgentDefinition(
                 description="Reformat changelog content to match the changelog template structure",
                 prompt=f"""
-                    You are responsible for reformatting raw changelog content to match the exact template structure.
+                    Reformat changelog content to match the exact template structure.
+                    
+                    Access: Only ./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md (today's file only).
 
-                    IMPORTANT: You only have permission to access today's changelog file: ./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md
-                    You cannot read or modify older changelog files.
-
-                    CRITICAL - File Access Rules:
-                    - The Read tool ONLY works on FILES, not directories
-                    - Only read the specific file path: ./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md
-                    - Do NOT try to read directories or media files
-
-                    Your task:
-                    1. Read the raw changelog content from ./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md (created by changelog_writer)
-                       - This is a FILE, not a directory
-                       - Use Read tool only on this specific file path
-                    2. Parse the content to identify all updates and their sections
-                    3. Categorize each update into "Platform updates" or "Teams and Enterprise" sections:
-                       - Teams and Enterprise keywords: Enterprise, Teams, SSO, SAML, SCIM, Identity, Access Management, Viewer Seats, Groups, Permissions, SAML SSO, SCIM provisioning
-                       - Everything else → Platform updates
-                    4. Extract update titles from ### Update Name headers
-                    5. Create bullet point summary lists at the top of each section (e.g., * [Update Name])
-                    6. Convert media paths from ./media/YYYY-MM-DD/filename to /images/changelog/YYYY-MM-DD/filename
-                    7. Format media files correctly:
-                       - Image files (.png, .jpg, .jpeg, .gif, .webp): Wrap in <Frame> with <img> tag: <Frame><img src="..." alt="..." /></Frame>
-                       - Video files (.mp4, .mov, .webm): Wrap in <Frame> with <video> tag: <Frame><video src="..." controls /></Frame>
-                       - NEVER use <img> tags for video files - always use <video> tags with controls attribute
-                    8. Structure content: bullet lists at top, detailed subsections below with ### [Update Name]
-                    9. Use the add_changelog_frontmatter tool to add properly formatted frontmatter (with correct single curly braces for AuthorCard import)
-                    10. Write the formatted content (with frontmatter) back to the same file path
-
-                    Required structure:
-                    - Section headers: "## Platform updates" and "## Teams and Enterprise"
-                    - Bullet summaries at top: * [Update Name] for each update in the section
-                    - Detailed sections below: ### [Update Name] followed by full content
-                    - Media paths: /images/changelog/YYYY-MM-DD/filename (not ./media/...)
-                    - ALL images MUST be wrapped in <Frame> components: <Frame><img src="..." alt="..." /></Frame>
-                    - ALL videos MUST be wrapped in <Frame> components with <video> tags: <Frame><video src="..." controls /></Frame>
-                    - Videos use <video> tag (not <img> tag) - check file extension to determine correct tag type
-                    - Frontmatter MUST be added using the add_changelog_frontmatter tool (ensures correct single curly braces format)
-
-                    Before writing, validate:
-                    - All updates are properly categorized
-                    - Bullet lists match detailed sections
-                    - Media paths are converted correctly
-                    - ALL images are wrapped in <Frame> components (check every <img> tag)
-                    - ALL videos use <video> tags (not <img> tags) and are wrapped in <Frame> components
-                    - Video files (.mp4, .mov, .webm) must use <video src="..." controls /> not <img>
-                    - Frontmatter was added using the tool (ensures proper format)
-                    - Content structure matches template exactly
-
-                    IMPORTANT - Edit Validation:
-                    - Before making any Edit tool call, verify that old_string and new_string are DIFFERENT
-                    - Never make an edit where the old and new strings are identical
-                    - If a section already matches the template, don't try to "fix" it with a no-op edit
-                    - Only make edits that actually change the content
-                    - Validate that your old_string matches the current file content exactly (including whitespace and newlines)
-
-                    IMPORTANT: Always use the add_changelog_frontmatter tool to add frontmatter. Do not manually write frontmatter. The tool ensures correct formatting with single curly braces for the AuthorCard import (not double braces).
-
-                    Media formatting requirements:
-                    - ALL images must be wrapped in <Frame> components
-                      - Convert any markdown image syntax (![...]) to: <Frame><img src="..." alt="..." /></Frame>
-                      - Convert any standalone <img> tags to: <Frame><img src="..." alt="..." /></Frame>
-                    - ALL video files (.mp4, .mov, etc.) must be wrapped in <Frame> components and use <video> tags
-                      - Convert any <img src="...*.mp4"> to: <Frame><video src="..." controls /></Frame>
-                      - Video files should use <video> tags with controls attribute, NOT <img> tags
-                    - Frame component is available by default in Mintlify (no import needed)
-                    - File extensions determine the tag type: .png, .jpg, .jpeg, .gif, .webp → <img>, .mp4, .mov, .webm → <video>
-
-                    Important: When reformatting, preserve the brand voice, writing style, and content quality. Maintain consistency with brand guidelines and docs style guide throughout the restructuring process.
+                    Process:
+                    1. Read ./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md
+                    2. Categorize updates: "Teams and Enterprise" (SSO, SAML, SCIM, Identity, Access Management, Viewer Seats, Groups, Permissions) or "Platform updates"
+                    3. Create structure:
+                       - Section headers: "## Platform updates" and "## Teams and Enterprise"
+                       - Bullet summaries at top: * [Update Name] for each section
+                       - Detailed sections: ### [Update Name] with full content below
+                    4. Convert media paths: ./media/YYYY-MM-DD/filename → /images/changelog/YYYY-MM-DD/filename
+                    5. Wrap all media in <Frame>:
+                       - Images (.png, .jpg, .jpeg, .gif, .webp): <Frame><img src="..." alt="..." /></Frame>
+                       - Videos (.mp4, .mov, .webm): <Frame><video src="..." controls /></Frame>
+                    6. Use add_changelog_frontmatter tool (don't write frontmatter manually)
+                    7. Write formatted content back to same file path
+                    
+                    Rules: Only edit when content actually changes. Preserve brand voice and style.
 
                     <changelog_template>
                         {open('./prompts/changelog_template.md').read()}
@@ -237,32 +171,11 @@ async def main():
             "review_and_feedback": AgentDefinition(
                 description="Use this agent to review copy and provide feedback on the PR",
                 prompt=f"""
-                    You are an expert developer relations professional focused on editorial review.
-                    Given a draft changelog and/or PR, evaluate for clarity, tone, correctness, and developer experience.
-                    Provide specific, actionable suggestions and, when appropriate, propose improved wording.
-                    Check that: brand voice is consistent, technical claims are accurate, links work and are relative, and entries include necessary context.
-                    Return a concise list of recommendations and, if asked, an edited version of the text.
-                    Assume all details are correct and start work.
-
-                    IMPORTANT - File Access Rules:
-                    - The Read tool ONLY works on FILES, not directories
-                    - Only read .md files (e.g., ./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md)
-                    - Do NOT try to read directories or media files
-
-                    IMPORTANT - Edit Validation:
-                    - Before making any Edit tool call, verify that old_string and new_string are DIFFERENT
-                    - Never make an edit where the old and new strings are identical
-                    - If content doesn't need changing, skip the edit - don't make a no-op edit
-                    - Only make edits that actually change the content
-                    - Validate that your old_string matches the current file content exactly
-
-                    Review checklist:
-                    - Brand voice and tone consistency (see brand_guidelines)
-                    - Documentation style adherence (see docs_style_guide)
-                    - Content quality and clarity (see good_docs)
-                    - Template structure compliance (see changelog_template)
-                    - Technical accuracy and completeness
-                    - Link formatting and validity
+                    Review changelog for clarity, tone, correctness, and developer experience.
+                    Provide actionable suggestions and improved wording when needed.
+                    
+                    Review: Brand voice, technical accuracy, link validity, template compliance, content quality.
+                    Rules: Only read/write .md files. Only edit when content changes.
 
                     <brand_guidelines>
                         {open('./prompts/brand_guidelines.md').read()}
@@ -292,29 +205,14 @@ async def main():
             "pr_writer": AgentDefinition(
                 description="Draft a PR using our brand guidelines and changelog format",
                 prompt=f"""
-                    You are responsible for packaging and submitting the changelog via GitHub.
+                    Create GitHub PR with the formatted changelog.
 
+                    Use create_changelog_pr with:
+                    - changelog_path: ./docs/updates/YYYY-MM-DD.md
+                    - Do NOT pass media_files (auto-discovered)
+                    
+                    The tool handles: branch creation, file uploads, docs.json updates, PR creation.
                     Repository: {os.getenv('GITHUB_REPO')}
-
-                    Given the formatted changelog file at ./docs/updates/YYYY-MM-DD.md (already formatted by template_formatter):
-                    Use create_changelog_pr to create the complete PR with:
-                       - The formatted changelog content (or path to the local file, e.g., ./docs/updates/YYYY-MM-DD.md)
-                       - DO NOT manually specify media_files parameter - the tool automatically discovers all files in ./docs/updates/media/YYYY-MM-DD/
-                       - DO NOT try to read directories or media files - the tool handles all file discovery
-                       - The tool will automatically handle branch creation, file uploads, docs.json updates, and PR creation
-
-                    The create_changelog_pr tool is deterministic and handles the entire workflow:
-                    - Creates a new branch
-                    - Uploads the changelog file to docs/updates/YYYY/MM/DD/changelog.mdx
-                    - Automatically discovers and uploads ALL media files from ./docs/updates/media/YYYY-MM-DD/ to docs/images/changelog/YYYY-MM-DD/
-                    - Updates docs.json with the new changelog entry
-                    - Creates a draft PR with proper formatting
-
-                    IMPORTANT: Do not pass the media_files parameter. The tool will automatically find and upload all media files in the directory.
-                    The changelog should already be properly formatted with frontmatter and template structure by template_formatter, and reviewed by review_and_feedback.
-                    You don't need to format or review it - just create the PR with the existing formatted and reviewed content.
-
-                    Do not use the CLI. Use only the configured github_changelog tools.
                 """,
                 model="haiku",
                 tools=permission_groups["pr_writer"],
