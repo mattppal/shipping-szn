@@ -16,3 +16,4 @@ updates/
 docs/**/*/**
 .claude/**
 
+.DS_Store
