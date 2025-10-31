@@ -15,3 +15,5 @@ wheels/
 updates/
 docs/**/*/**
 .claude/**
+
+.DS_Store

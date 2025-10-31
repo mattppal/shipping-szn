@@ -2,7 +2,7 @@ title: []
 description: 2 min read
 ---
 
-import {{ AuthorCard }} from '/snippets/author-card.mdx';
+import { AuthorCard } from '/snippets/author-card.mdx';
 
 <AuthorCard/>
 
@@ -18,7 +18,17 @@ import {{ AuthorCard }} from '/snippets/author-card.mdx';
 
 ### [Update 1]
 
-![/images/changelog/YYYY-MM-DD/filename](Image metadata)
+<Frame>
+  <img src="/images/changelog/YYYY-MM-DD/image-filename.png" alt="Image description" />
+</Frame>
+
+[Description using guidlines from docs repo]
+
+### [Update with Video]
+
+<Frame>
+  <video src="/images/changelog/YYYY-MM-DD/video-filename.mp4" controls />
+</Frame>
 
 [Description using guidlines from docs repo]
 
@@ -28,7 +38,9 @@ import {{ AuthorCard }} from '/snippets/author-card.mdx';
 
 ### [Update 3]
 
-![/images/changelog/YYYY-MM-DD/filename](Image metadata)
+<Frame>
+  <img src="/images/changelog/YYYY-MM-DD/filename" alt="Image description" />
+</Frame>
 
 [Description using guidlines from docs repo]
 
