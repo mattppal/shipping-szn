@@ -14,20 +14,3 @@ dependencies = [
     "pytest>=8.4.2",
     "pygithub>=2.8.1",
 ]
-
-[tool.pytest.ini_options]
-markers = [
-    "integration: marks tests as integration tests",
-    "unit: marks tests as unit tests",
-    "asyncio: marks tests as async (pytest-asyncio)",
-]
-asyncio_mode = "auto"
-testpaths = ["test"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-
-[dependency-groups]
-dev = [
-    "pytest-asyncio>=1.2.0",
-]
