@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional
 from claude_agent_sdk import tool
 from dotenv import load_dotenv
 from github import Github
+from github.GitTree import GitTree
 from github.GithubException import GithubException
 
 load_dotenv()
@@ -138,35 +139,13 @@ async def create_commit_with_files(
                     logger.error(f"Error creating blob for {file_path}: {str(e)}")
                     return None
 
-            # Step 2: Get the current tree from parent commit (recursive to get all files)
+            # Step 2: Get the base tree SHA from parent commit
             parent_commit = repo.get_git_commit(parent_commit_sha)
-            base_tree = repo.get_git_tree(parent_commit.tree.sha, recursive=True)
+            base_tree_sha = parent_commit.tree.sha
 
-            # Step 3: Create tree entries - preserve existing tree and add/update our files
+            # Step 3: Build tree entries with only our new/updated files
+            # GitHub API's base_tree parameter automatically preserves all existing files
             tree_entries = []
-
-            # Track which paths we're adding/updating
-            paths_to_update = set(blob_shas.keys())
-
-            # Add all existing file entries (blobs) that we're not modifying
-            # When recursive=True, we get all files with their full paths
-            # Note: We only preserve blobs (files), not trees (directories)
-            # PyGithub will automatically create the necessary tree structure
-            # when we create the new tree with full file paths
-            for element in base_tree.tree:
-                # Only preserve blob (file) entries that aren't being replaced
-                # Skip tree (directory) entries - they'll be auto-created
-                if element.type == "blob" and element.path not in paths_to_update:
-                    tree_entries.append(
-                        {
-                            "path": element.path,
-                            "mode": element.mode,
-                            "type": element.type,
-                            "sha": element.sha,
-                        }
-                    )
-
-            # Add our new/updated files
             for file_path, blob_sha in blob_shas.items():
                 tree_entries.append(
                     {
@@ -177,10 +156,32 @@ async def create_commit_with_files(
                     }
                 )
 
-            # Step 4: Create the new tree
+            # Step 4: Create the new tree using base_tree to preserve existing files
+            # PyGithub's create_git_tree doesn't directly support base_tree parameter
+            # So we'll use the _requester to call the API directly
             try:
-                new_tree = repo.create_git_tree(tree_entries)
-                logger.info(f"Created tree with {len(tree_entries)} entries")
+                # Use base_tree parameter via _requester to preserve all existing files
+                tree_data = {
+                    "base_tree": base_tree_sha,
+                    "tree": tree_entries,
+                }
+                headers = {"Accept": "application/vnd.github.v3+json"}
+                tree_result = repo._requester.requestJsonAndCheck(
+                    "POST", f"{repo.url}/git/trees", input=tree_data, headers=headers
+                )
+                new_tree_sha = tree_result[1]["sha"]
+                logger.info(
+                    f"Created tree with {len(tree_entries)} new/updated files "
+                    "(preserved existing files via base_tree)"
+                )
+
+                # Create a GitTree object from the SHA
+                new_tree = GitTree(
+                    repo._requester,
+                    repo._headers,
+                    {"sha": new_tree_sha},
+                    completed=True,
+                )
             except Exception as e:
                 logger.error(f"Error creating tree: {str(e)}")
                 logger.error(f"Tree entries count: {len(tree_entries)}")
@@ -767,11 +768,12 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
             )
 
             if not commit_sha:
+                # Get the actual error from the exception
                 return {
                     "content": [
                         {
                             "type": "text",
-                            "text": "Error: Failed to create commit with files",
+                            "text": "Error: Failed to create commit with files. Check logs for details.",
                         }
                     ],
                     "is_error": True,
