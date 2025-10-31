@@ -1,0 +1,40 @@
+---
+description: Testing patterns and best practices
+globs: ["**/test/**/*.py"]
+alwaysApply: true
+---
+
+# Testing Patterns
+
+**References:** See [TESTING_ANALYSIS.md](../TESTING_ANALYSIS.md) and [CI_TEST_RECOMMENDATIONS.md](../CI_TEST_RECOMMENDATIONS.md) for detailed testing guidelines.
+
+## Test Structure
+
+```python
+#!/usr/bin/env python3
+"""Test description."""
+
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+def test_feature_name():
+    """Test specific behavior."""
+    # Arrange
+    # Act
+    # Assert
+```
+
+**Test files:** `test/test_<module_name>.py`
+
+See existing test files in `test/` directory for examples (e.g., `test_github_token.py`, `test_mcp_server.py`).
+
+## Best Practices
+
+- Load env vars at module level: `load_dotenv()`
+- Descriptive test names that explain what is being tested
+- Mock external API calls when appropriate
+- Test both success and error cases
+- Use pytest fixtures for common setup
+- See [TESTING_ANALYSIS.md](../TESTING_ANALYSIS.md) for coverage analysis and recommendations

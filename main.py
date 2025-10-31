@@ -114,6 +114,12 @@ async def main():
                     - Focus on content quality, completeness, and accuracy
                     - Don't worry about exact template structure - template_formatter will handle that
 
+                    IMPORTANT - Edit Validation:
+                    - Before making any Edit tool call, verify that old_string and new_string are DIFFERENT
+                    - Never make an edit where the old and new strings are identical
+                    - If content doesn't need changing, skip the edit - don't make a no-op edit
+                    - Only make edits that actually change the content
+
                     Tools available:
                     - fetch_messages_from_channel: Fetch messages with all media and threads from a Slack channel
                     - SearchReplit: Find relevant documentation links
@@ -180,6 +186,13 @@ async def main():
                     - Frontmatter was added using the tool (ensures proper format)
                     - Content structure matches template exactly
 
+                    IMPORTANT - Edit Validation:
+                    - Before making any Edit tool call, verify that old_string and new_string are DIFFERENT
+                    - Never make an edit where the old and new strings are identical
+                    - If a section already matches the template, don't try to "fix" it with a no-op edit
+                    - Only make edits that actually change the content
+                    - Validate that your old_string matches the current file content exactly (including whitespace and newlines)
+
                     IMPORTANT: Always use the add_changelog_frontmatter tool to add frontmatter. Do not manually write frontmatter. The tool ensures correct formatting with single curly braces for the AuthorCard import (not double braces).
 
                     Media formatting requirements:
@@ -218,6 +231,13 @@ async def main():
                     Check that: brand voice is consistent, technical claims are accurate, links work and are relative, and entries include necessary context.
                     Return a concise list of recommendations and, if asked, an edited version of the text.
                     Assume all details are correct and start work.
+
+                    IMPORTANT - Edit Validation:
+                    - Before making any Edit tool call, verify that old_string and new_string are DIFFERENT
+                    - Never make an edit where the old and new strings are identical
+                    - If content doesn't need changing, skip the edit - don't make a no-op edit
+                    - Only make edits that actually change the content
+                    - Validate that your old_string matches the current file content exactly
 
                     Review checklist:
                     - Brand voice and tone consistency (see brand_guidelines)

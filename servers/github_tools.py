@@ -1,6 +1,7 @@
 """Simple, standalone GitHub tools for Claude Agent SDK."""
 
 import asyncio
+import base64
 import json
 import logging
 import os
@@ -98,6 +99,106 @@ This PR is created as a draft to allow for human review before publishing.
 /label needs-review
 /label changelog
 """
+
+
+async def create_commit_with_files(
+    repo,
+    branch_name: str,
+    files: Dict[str, bytes],
+    commit_message: str,
+    parent_commit_sha: str,
+) -> Optional[str]:
+    """Create a single commit with multiple files using Git Data API.
+
+    Args:
+        repo: GitHub repository object
+        branch_name: Target branch name
+        files: Dictionary mapping file paths to file content (bytes)
+        commit_message: Commit message
+        parent_commit_sha: SHA of the parent commit
+
+    Returns:
+        Commit SHA if successful, None otherwise
+    """
+    try:
+        loop = asyncio.get_event_loop()
+
+        def create_commit():
+            # Step 1: Create blobs for all files
+            blob_shas = {}
+            for file_path, file_content in files.items():
+                try:
+                    # PyGithub create_git_blob expects base64-encoded string
+                    # file_content is bytes, so encode to base64 string
+                    content_base64 = base64.b64encode(file_content).decode("utf-8")
+                    blob = repo.create_git_blob(content_base64, "base64")
+                    blob_shas[file_path] = blob.sha
+                    logger.info(f"Created blob for: {file_path}")
+                except Exception as e:
+                    logger.error(f"Error creating blob for {file_path}: {str(e)}")
+                    return None
+
+            # Step 2: Get the current tree from parent commit
+            parent_commit = repo.get_git_commit(parent_commit_sha)
+            base_tree = repo.get_git_tree(parent_commit.tree.sha, recursive=True)
+
+            # Step 3: Create tree entries - preserve existing tree and add/update our files
+            tree_entries = []
+
+            # Track which paths we're adding/updating
+            paths_to_update = set(blob_shas.keys())
+
+            # Add all existing tree entries that we're not modifying
+            for element in base_tree.tree:
+                # Only preserve entries that aren't being replaced
+                if element.path not in paths_to_update:
+                    tree_entries.append(
+                        {
+                            "path": element.path,
+                            "mode": element.mode,
+                            "type": element.type,
+                            "sha": element.sha,
+                        }
+                    )
+
+            # Add our new/updated files
+            for file_path, blob_sha in blob_shas.items():
+                tree_entries.append(
+                    {
+                        "path": file_path,
+                        "mode": "100644",  # Regular file mode
+                        "type": "blob",
+                        "sha": blob_sha,
+                    }
+                )
+
+            # Step 4: Create the new tree
+            new_tree = repo.create_git_tree(tree_entries)
+            logger.info(f"Created tree with {len(tree_entries)} entries")
+
+            # Step 5: Create the commit
+            commit = repo.create_git_commit(
+                message=commit_message,
+                tree=new_tree,
+                parents=[parent_commit],
+            )
+            logger.info(f"Created commit: {commit.sha}")
+
+            return commit.sha
+
+        commit_sha = await loop.run_in_executor(None, create_commit)
+
+        if commit_sha:
+            # Step 6: Update the branch reference
+            ref = repo.get_git_ref(f"heads/{branch_name}")
+            ref.edit(commit_sha)
+            logger.info(f"Updated branch {branch_name} to commit {commit_sha}")
+
+        return commit_sha
+
+    except Exception as e:
+        logger.error(f"Error creating commit with files: {str(e)}", exc_info=True)
+        return None
 
 
 async def upload_media_file(
@@ -565,10 +666,10 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
         repo.create_git_ref(f"refs/heads/{branch_name}", ref.object.sha)
         logger.info(f"Created branch: {branch_name}")
 
-        # Track uploaded files
-        uploaded_files = []
+        # Collect all files to commit atomically
+        files_to_commit: Dict[str, bytes] = {}
 
-        # 1. Upload media files - auto-discover if not provided
+        # 1. Collect media files - auto-discover if not provided
         media_files = args.get("media_files", [])
 
         # Validate media_files is a list
@@ -602,44 +703,65 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
         if media_files:
             logger.info(f"Processing {len(media_files)} media files: {media_files}")
 
-            # Upload media files sequentially to avoid race conditions and SHA conflicts
+            # Read all media files into memory
             for local_path in media_files:
-                remote_path = await upload_media_file(
-                    repo, local_path, date_str, branch_name
-                )
-                if remote_path:  # Only count successful uploads (not None)
-                    uploaded_files.append(remote_path)
+                try:
+                    with open(local_path, "rb") as f:
+                        file_content = f.read()
+                    filename = os.path.basename(local_path)
+                    remote_path = f"docs/images/changelog/{date_str}/{filename}"
+                    files_to_commit[remote_path] = file_content
                     media_count += 1
+                except Exception as e:
+                    logger.error(f"Error reading media file {local_path}: {str(e)}")
 
-        # 2. Create changelog file
+        # 2. Add changelog file
         changelog_remote_path = f"docs/updates/{year}/{month}/{day}/changelog.mdx"
-        repo.create_file(
-            path=changelog_remote_path,
-            message=f"Add changelog for {date_str}",
-            content=changelog_content,
-            branch=branch_name,
-        )
-        uploaded_files.append(changelog_remote_path)
-        logger.info(f"Created changelog: {changelog_remote_path}")
+        files_to_commit[changelog_remote_path] = changelog_content.encode("utf-8")
 
         # 3. Update docs.json
         try:
-            docs_file = repo.get_contents(DOCS_JSON_PATH, ref=branch_name)
+            # Get current docs.json from the base branch (before our branch changes)
+            docs_file = repo.get_contents(DOCS_JSON_PATH, ref=default_branch)
             current_docs = docs_file.decoded_content.decode()
             updated_docs = update_docs_json_content(current_docs, year, month, day)
-
-            repo.update_file(
-                path=DOCS_JSON_PATH,
-                message=f"Update docs.json with changelog entry for {date_str}",
-                content=updated_docs,
-                sha=docs_file.sha,
-                branch=branch_name,
-            )
-            uploaded_files.append(DOCS_JSON_PATH)
-            logger.info("Updated docs.json")
+            if updated_docs:
+                files_to_commit[DOCS_JSON_PATH] = updated_docs.encode("utf-8")
+                logger.info("Prepared docs.json update")
+            else:
+                logger.warning("update_docs_json_content returned None, skipping")
         except Exception as e:
-            logger.error(f"Error updating docs.json: {str(e)}")
-            # Continue to create PR even if docs.json update fails
+            logger.error(f"Error preparing docs.json update: {str(e)}")
+            # Continue without docs.json if it fails
+
+        # Commit all files atomically in a single commit
+        if files_to_commit:
+            parent_commit_sha = ref.object.sha
+            commit_message = f"Add changelog for {date_str}"
+
+            commit_sha = await create_commit_with_files(
+                repo=repo,
+                branch_name=branch_name,
+                files=files_to_commit,
+                commit_message=commit_message,
+                parent_commit_sha=parent_commit_sha,
+            )
+
+            if not commit_sha:
+                return {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Error: Failed to create commit with files",
+                        }
+                    ],
+                    "is_error": True,
+                }
+
+            logger.info(
+                f"Successfully committed {len(files_to_commit)} files in one commit"
+            )
+            uploaded_files = list(files_to_commit.keys())
 
         # 4. Create pull request
         pr_title = args.get("pr_title") or f"[BOT] Changelog: {date_str}"
