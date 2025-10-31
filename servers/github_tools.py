@@ -129,15 +129,13 @@ async def create_commit_with_files(
             blob_shas = {}
             for file_path, file_content in files.items():
                 try:
-                    # PyGithub create_git_blob expects base64-encoded string
-                    # file_content is bytes, so encode to base64 string
                     content_base64 = base64.b64encode(file_content).decode("utf-8")
                     blob = repo.create_git_blob(content_base64, "base64")
                     blob_shas[file_path] = blob.sha
-                    logger.info(f"Created blob for: {file_path}")
                 except Exception as e:
                     logger.error(f"Error creating blob for {file_path}: {str(e)}")
                     return None
+            logger.debug(f"Created {len(blob_shas)} blobs")
 
             # Step 2: Get the base tree SHA from parent commit
             parent_commit = repo.get_git_commit(parent_commit_sha)
@@ -170,10 +168,7 @@ async def create_commit_with_files(
                     "POST", f"{repo.url}/git/trees", input=tree_data, headers=headers
                 )
                 new_tree_sha = tree_result[1]["sha"]
-                logger.info(
-                    f"Created tree with {len(tree_entries)} new/updated files "
-                    "(preserved existing files via base_tree)"
-                )
+                logger.debug(f"Created tree with {len(tree_entries)} files")
 
                 # Create a GitTree object from the SHA
                 new_tree = GitTree(
@@ -184,10 +179,6 @@ async def create_commit_with_files(
                 )
             except Exception as e:
                 logger.error(f"Error creating tree: {str(e)}")
-                logger.error(f"Tree entries count: {len(tree_entries)}")
-                logger.error(
-                    f"First few entries: {tree_entries[:3] if len(tree_entries) > 0 else 'empty'}"
-                )
                 raise
 
             # Step 5: Create the commit
@@ -197,14 +188,11 @@ async def create_commit_with_files(
                     tree=new_tree,
                     parents=[parent_commit],
                 )
-                logger.info(f"Created commit: {commit.sha}")
+                logger.debug(f"Created commit: {commit.sha}")
+                return commit.sha
             except Exception as e:
                 logger.error(f"Error creating commit: {str(e)}")
-                logger.error(f"Tree SHA: {new_tree.sha}")
-                logger.error(f"Parent commit SHA: {parent_commit_sha}")
                 raise
-
-            return commit.sha
 
         commit_sha = await loop.run_in_executor(None, create_commit)
 
@@ -212,7 +200,9 @@ async def create_commit_with_files(
             # Step 6: Update the branch reference
             ref = repo.get_git_ref(f"heads/{branch_name}")
             ref.edit(commit_sha)
-            logger.info(f"Updated branch {branch_name} to commit {commit_sha}")
+            logger.info(
+                f"Committed {len(files)} files to {branch_name} ({commit_sha[:8]})"
+            )
 
         return commit_sha
 
@@ -268,7 +258,7 @@ async def upload_media_file(
                     # File exists - check if content is the same
                     existing_content = existing_file.decoded_content
                     if existing_content == file_content:
-                        logger.info(f"Media file unchanged, skipping: {remote_path}")
+                        logger.debug(f"Media file unchanged: {remote_path}")
                         return
                     # Content differs - update it with fresh SHA
                     repo.update_file(
@@ -278,7 +268,7 @@ async def upload_media_file(
                         sha=existing_file.sha,
                         branch=branch_name,
                     )
-                    logger.info(f"Updated existing media: {remote_path}")
+                    logger.debug(f"Updated existing media: {remote_path}")
                     return
                 except GithubException as e:
                     if e.status == 404:
@@ -290,7 +280,7 @@ async def upload_media_file(
                                 content=file_content,
                                 branch=branch_name,
                             )
-                            logger.info(f"Created new media: {remote_path}")
+                            logger.debug(f"Created new media: {remote_path}")
                             return
                         except GithubException as create_e:
                             # If create fails with 409, file exists (created concurrently)
@@ -348,7 +338,7 @@ async def upload_media_file(
 
         await loop.run_in_executor(None, upload_or_update)
 
-        logger.info(f"Uploaded media: {remote_path}")
+        logger.debug(f"Uploaded media: {remote_path}")
         return remote_path
     except Exception as e:
         logger.error(f"Error uploading media file {local_path}: {str(e)}")
@@ -678,13 +668,13 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
         day = date_info["day"]
         date_str = f"{year}-{month}-{day}"
 
-        logger.info(f"Creating changelog PR for date: {date_str}")
+        logger.info(f"Creating changelog PR for {date_str}")
 
         # Create new branch
         branch_name = create_branch_name()
         ref = repo.get_git_ref(f"heads/{default_branch}")
         repo.create_git_ref(f"refs/heads/{branch_name}", ref.object.sha)
-        logger.info(f"Created branch: {branch_name}")
+        logger.debug(f"Created branch: {branch_name}")
 
         # Collect all files to commit atomically
         files_to_commit: Dict[str, bytes] = {}
@@ -714,14 +704,12 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
                     if os.path.isfile(file_path):
                         discovered_files.append(file_path)
                 if discovered_files:
-                    logger.info(
-                        f"Auto-discovered {len(discovered_files)} media files in {media_dir}"
-                    )
+                    logger.debug(f"Auto-discovered {len(discovered_files)} media files")
                     media_files = discovered_files
 
         media_count = 0
         if media_files:
-            logger.info(f"Processing {len(media_files)} media files: {media_files}")
+            logger.debug(f"Processing {len(media_files)} media files")
 
             # Read all media files into memory
             for local_path in media_files:
@@ -739,6 +727,35 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
         changelog_remote_path = f"docs/updates/{year}/{month}/{day}/changelog.mdx"
         files_to_commit[changelog_remote_path] = changelog_content.encode("utf-8")
 
+        # Validate: Check if changelog references files that don't exist locally
+        if changelog_content:
+            # Extract media file references for this date from changelog
+            date_pattern = date_str.replace("-", r"\-")
+            media_refs = set(
+                re.findall(
+                    rf'/images/changelog/{date_pattern}/([^"\s)]+)',
+                    changelog_content,
+                )
+            )
+            # Get filenames we're actually uploading
+            uploaded_filenames = {
+                os.path.basename(path)
+                for path in files_to_commit.keys()
+                if f"images/changelog/{date_str}/" in path
+            }
+            # Find missing files
+            missing_files = media_refs - uploaded_filenames
+            if missing_files:
+                logger.warning(
+                    f"⚠️  Changelog references {len(missing_files)} media files "
+                    f"not found locally: {', '.join(sorted(missing_files)[:3])}"
+                    + (
+                        f" and {len(missing_files)-3} more"
+                        if len(missing_files) > 3
+                        else ""
+                    )
+                )
+
         # 3. Update docs.json
         try:
             # Get current docs.json from the base branch (before our branch changes)
@@ -747,7 +764,6 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
             updated_docs = update_docs_json_content(current_docs, year, month, day)
             if updated_docs:
                 files_to_commit[DOCS_JSON_PATH] = updated_docs.encode("utf-8")
-                logger.info("Prepared docs.json update")
             else:
                 logger.warning("update_docs_json_content returned None, skipping")
         except Exception as e:
@@ -779,9 +795,6 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
                     "is_error": True,
                 }
 
-            logger.info(
-                f"Successfully committed {len(files_to_commit)} files in one commit"
-            )
             uploaded_files = list(files_to_commit.keys())
 
         # 4. Create pull request
