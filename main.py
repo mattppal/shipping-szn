@@ -114,6 +114,12 @@ async def main():
                     - Focus on content quality, completeness, and accuracy
                     - Don't worry about exact template structure - template_formatter will handle that
 
+                    IMPORTANT - File Access Rules:
+                    - The Read tool ONLY works on FILES, not directories
+                    - Do NOT try to read directories (e.g., ./docs/updates, ./docs/updates/media)
+                    - Only read specific file paths that end in .md or other file extensions
+                    - If you try to read a directory, you will get an error
+
                     IMPORTANT - Edit Validation:
                     - Before making any Edit tool call, verify that old_string and new_string are DIFFERENT
                     - Never make an edit where the old and new strings are identical
@@ -149,8 +155,16 @@ async def main():
                     IMPORTANT: You only have permission to access today's changelog file: ./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md
                     You cannot read or modify older changelog files.
 
+                    CRITICAL - File Access Rules:
+                    - The Read tool ONLY works on FILES, not directories
+                    - Do NOT try to read directories (e.g., ./docs/updates, ./docs/updates/media/2025-10-31)
+                    - Only read the specific file path: ./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md
+                    - If you try to read a directory, you will get an error
+
                     Your task:
                     1. Read the raw changelog content from ./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md (created by changelog_writer)
+                       - This is a FILE, not a directory
+                       - Use Read tool only on this specific file path
                     2. Parse the content to identify all updates and their sections
                     3. Categorize each update into "Platform updates" or "Teams and Enterprise" sections:
                        - Teams and Enterprise keywords: Enterprise, Teams, SSO, SAML, SCIM, Identity, Access Management, Viewer Seats, Groups, Permissions, SAML SSO, SCIM provisioning
@@ -232,6 +246,13 @@ async def main():
                     Return a concise list of recommendations and, if asked, an edited version of the text.
                     Assume all details are correct and start work.
 
+                    IMPORTANT - File Access Rules:
+                    - The Read tool ONLY works on FILES, not directories
+                    - Do NOT try to read directories (e.g., ./docs/updates, ./docs/updates/media)
+                    - Only read specific file paths that end in .md or other file extensions
+                    - If you need to review today's changelog, read: ./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md
+                    - If you try to read a directory, you will get an error
+
                     IMPORTANT - Edit Validation:
                     - Before making any Edit tool call, verify that old_string and new_string are DIFFERENT
                     - Never make an edit where the old and new strings are identical
@@ -283,7 +304,8 @@ async def main():
                     Use create_changelog_pr to create the complete PR with:
                        - The formatted changelog content (or path to the local file, e.g., ./docs/updates/YYYY-MM-DD.md)
                        - DO NOT manually specify media_files parameter - the tool automatically discovers all files in ./docs/updates/media/YYYY-MM-DD/
-                       - Even though you have read access to the media directory, you don't need to enumerate or pass those files - let the tool handle discovery
+                       - DO NOT try to read directories or enumerate files yourself - the tool handles all file discovery
+                       - The Read tool only works on FILES, not directories - do not attempt to read paths like ./docs/updates/media/
                        - The tool will automatically handle branch creation, file uploads, docs.json updates, and PR creation
 
                     The create_changelog_pr tool is deterministic and handles the entire workflow:
