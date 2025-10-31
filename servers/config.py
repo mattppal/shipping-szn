@@ -3,7 +3,7 @@ import dotenv
 from claude_agent_sdk.types import McpHttpServerConfig
 from claude_agent_sdk import create_sdk_mcp_server
 from servers.slack_tools import fetch_messages_from_channel
-from servers.github_tools import create_changelog_pr
+from servers.github_tools import create_changelog_pr, add_changelog_frontmatter
 
 dotenv.load_dotenv()
 
@@ -29,6 +29,6 @@ MCP_SERVERS = {
     ),
     "github_changelog": create_sdk_mcp_server(
         name="github_changelog",
-        tools=[create_changelog_pr],
+        tools=[create_changelog_pr, add_changelog_frontmatter],
     ),
 }
