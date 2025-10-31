@@ -138,7 +138,7 @@ async def create_commit_with_files(
                     logger.error(f"Error creating blob for {file_path}: {str(e)}")
                     return None
 
-            # Step 2: Get the current tree from parent commit
+            # Step 2: Get the current tree from parent commit (recursive to get all files)
             parent_commit = repo.get_git_commit(parent_commit_sha)
             base_tree = repo.get_git_tree(parent_commit.tree.sha, recursive=True)
 
@@ -148,10 +148,15 @@ async def create_commit_with_files(
             # Track which paths we're adding/updating
             paths_to_update = set(blob_shas.keys())
 
-            # Add all existing tree entries that we're not modifying
+            # Add all existing file entries (blobs) that we're not modifying
+            # When recursive=True, we get all files with their full paths
+            # Note: We only preserve blobs (files), not trees (directories)
+            # PyGithub will automatically create the necessary tree structure
+            # when we create the new tree with full file paths
             for element in base_tree.tree:
-                # Only preserve entries that aren't being replaced
-                if element.path not in paths_to_update:
+                # Only preserve blob (file) entries that aren't being replaced
+                # Skip tree (directory) entries - they'll be auto-created
+                if element.type == "blob" and element.path not in paths_to_update:
                     tree_entries.append(
                         {
                             "path": element.path,
@@ -173,16 +178,30 @@ async def create_commit_with_files(
                 )
 
             # Step 4: Create the new tree
-            new_tree = repo.create_git_tree(tree_entries)
-            logger.info(f"Created tree with {len(tree_entries)} entries")
+            try:
+                new_tree = repo.create_git_tree(tree_entries)
+                logger.info(f"Created tree with {len(tree_entries)} entries")
+            except Exception as e:
+                logger.error(f"Error creating tree: {str(e)}")
+                logger.error(f"Tree entries count: {len(tree_entries)}")
+                logger.error(
+                    f"First few entries: {tree_entries[:3] if len(tree_entries) > 0 else 'empty'}"
+                )
+                raise
 
             # Step 5: Create the commit
-            commit = repo.create_git_commit(
-                message=commit_message,
-                tree=new_tree,
-                parents=[parent_commit],
-            )
-            logger.info(f"Created commit: {commit.sha}")
+            try:
+                commit = repo.create_git_commit(
+                    message=commit_message,
+                    tree=new_tree,
+                    parents=[parent_commit],
+                )
+                logger.info(f"Created commit: {commit.sha}")
+            except Exception as e:
+                logger.error(f"Error creating commit: {str(e)}")
+                logger.error(f"Tree SHA: {new_tree.sha}")
+                logger.error(f"Parent commit SHA: {parent_commit_sha}")
+                raise
 
             return commit.sha
 
