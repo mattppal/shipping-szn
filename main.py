@@ -107,25 +107,15 @@ async def main():
                     Process:
                     1. Use fetch_messages_from_channel (channel_id, days_back=7) to fetch Slack messages
                     2. Extract product changes, summarize crisply, group logically
-                    3. Include Slack message permalink for each entry
-                    4. Create ./docs/updates/YYYY-MM-DD.md (today's date)
-                    5. Add relevant Replit docs links (relative paths only)
-                    6. Focus on content quality - template_formatter handles structure
+                    3. **IMPORTANT**: Insert media files into content - check the Slack response for processed_files and add image references using ./media/YYYY-MM-DD/filename paths
+                    4. Include Slack message permalink for each entry
+                    5. Create ./docs/updates/YYYY-MM-DD.md (today's date)
+                    6. Add relevant Replit docs links (relative paths only)
+                    7. Focus on content quality - template_formatter handles structure
                     
                     Rules: Only read/write .md files. Only make edits that change content.
 
-                    <changelog_criteria>
-                        {open('./prompts/good_docs.md').read()}
-                    </changelog_criteria>
-
-                    <brand_guidelines>
-                        {open('./prompts/brand_guidelines.md').read()}
-                    </brand_guidelines>
-
-                    <docs_style_guide>
-                        {open('./prompts/docs_style_guide.md').read()}
-                    </docs_style_guide>
-
+                    You have access to skills for brand writing, documentation quality, and media insertion. The media-insertion skill shows you exactly how to add images from Slack into the markdown.
                 """,
                 model="sonnet",
                 tools=permission_groups["changelog_writer"],
@@ -144,54 +134,34 @@ async def main():
                        - Section headers: "## Platform updates" and "## Teams and Enterprise"
                        - Bullet summaries at top: * [Update Name] for each section
                        - Detailed sections: ### [Update Name] with full content below
-                    4. Convert media paths: ./media/YYYY-MM-DD/filename → /images/changelog/YYYY-MM-DD/filename
-                    5. Wrap all media in <Frame>:
-                       - Images (.png, .jpg, .jpeg, .gif, .webp): <Frame><img src="..." alt="..." /></Frame>
-                       - Videos (.mp4, .mov, .webm): <Frame><video src="..." controls /></Frame>
-                    6. Use add_changelog_frontmatter tool (don't write frontmatter manually)
-                    7. Write formatted content back to same file path
+                    4. **CRITICAL - Handle media properly**:
+                       a. For each image/video reference in markdown format: ![alt](./media/YYYY-MM-DD/filename)
+                       b. First VERIFY the file exists at ./docs/updates/media/YYYY-MM-DD/filename
+                       c. If file exists: Convert path to /images/changelog/YYYY-MM-DD/filename
+                       d. Wrap in <Frame> tags:
+                          - Images: <Frame><img src="/images/changelog/YYYY-MM-DD/file.png" alt="..." /></Frame>
+                          - Videos: <Frame><video src="/images/changelog/YYYY-MM-DD/file.mp4" controls /></Frame>
+                       e. If file doesn't exist: Remove the image reference entirely
+                    5. Use add_changelog_frontmatter tool (don't write frontmatter manually)
+                    6. Write formatted content back to same file path
                     
                     Rules: Only edit when content actually changes. Preserve brand voice and style.
 
-                    <changelog_template>
-                        {open('./prompts/changelog_template.md').read()}
-                    </changelog_template>
-
-                    <brand_guidelines>
-                        {open('./prompts/brand_guidelines.md').read()}
-                    </brand_guidelines>
-
-                    <docs_style_guide>
-                        {open('./prompts/docs_style_guide.md').read()}
-                    </docs_style_guide>
+                    You have access to the changelog-formatting skill with complete template and style guidelines. Use it for reference.
                 """,
                 model="sonnet",
                 tools=permission_groups["template_formatter"],
             ),
             "review_and_feedback": AgentDefinition(
                 description="Use this agent to review copy and provide feedback on the PR",
-                prompt=f"""
+                prompt="""
                     Review changelog for clarity, tone, correctness, and developer experience.
                     Provide actionable suggestions and improved wording when needed.
                     
                     Review: Brand voice, technical accuracy, link validity, template compliance, content quality.
                     Rules: Only read/write .md files. Only edit when content changes.
 
-                    <brand_guidelines>
-                        {open('./prompts/brand_guidelines.md').read()}
-                    </brand_guidelines>
-
-                    <docs_style_guide>
-                        {open('./prompts/docs_style_guide.md').read()}
-                    </docs_style_guide>
-
-                    <changelog_criteria>
-                        {open('./prompts/good_docs.md').read()}
-                    </changelog_criteria>
-
-                    <changelog_template>
-                        {open('./prompts/changelog_template.md').read()}
-                    </changelog_template>
+                    You have access to skills for brand writing, documentation quality, and changelog formatting. Use them to guide your review.
                 """,
                 model="haiku",
                 tools=[

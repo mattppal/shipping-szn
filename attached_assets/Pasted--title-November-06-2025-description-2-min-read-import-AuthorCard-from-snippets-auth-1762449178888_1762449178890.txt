@@ -1,0 +1,77 @@
+---
+title: November 06, 2025
+description: 2 min read
+---
+
+import { AuthorCard } from '/snippets/author-card.mdx';
+
+<AuthorCard/>
+
+## Platform updates
+
+* [Agent performance improvements](#agent-performance-improvements)
+* [Agent tools dropdown in planning flows](#agent-tools-dropdown-in-planning-flows)
+* [Connectors now work with remixing](#connectors-now-work-with-remixing)
+* [Filename mentions with @ syntax](#filename-mentions-with--syntax)
+* [Secure MCP authentication proxy](#secure-mcp-authentication-proxy)
+* [Custom domain verification improvements](#custom-domain-verification-improvements)
+
+### Agent performance improvements
+
+Agent now starts up faster with parallelized initialization work, cutting boot times significantly. We've also added pre-warming capabilities that prepare the agent as soon as you start typing in the chat box, so it's ready to respond the moment you hit send.
+
+[View update](https://replit.slack.com/archives/C05KHJEGZQX/p1762384900357499?thread_ts=1762384900.357499&cid=C05KHJEGZQX)
+
+Learn more about [Replit Agent](/replitai/general-agent) and [autonomy settings](/replitai/autonomy-level).
+
+### Agent tools dropdown in planning flows
+
+You can now configure Agent tools settings during initial planning and task list approval. Start your builds with your preferred Agent configuration, including autonomy level and other settings, right from the beginning.
+
+[View update](https://replit.slack.com/archives/C05KHJEGZQX/p1762281034131199)
+
+Learn more about [Agent autonomy levels](/replitai/autonomy-level) and [Agent integrations](/replitai/integrations).
+
+### Connectors now work with remixing
+
+Previously, remixing a Replit app that used a connector would break the integration. Now when you remix an app with connectors, you'll see a clear setup flow that guides you through authorizing the connector for your remixed version. This makes it much easier to build on top of existing apps that use third-party integrations.
+
+[View update](https://replit.slack.com/archives/C05KHJEGZQX/p1761950647157499?thread_ts=1761950647.157499&cid=C05KHJEGZQX)
+
+Learn more about [Agent integrations](/replitai/integrations) and [Connectors for Organizations](/replitai/connectors-for-organizations).
+
+### Filename mentions with @ syntax
+
+Agent now supports `@filename` syntax in addition to `/filename` for referencing files. This brings familiar functionality for Cursor and power users, and was a highly requested feature from enterprise customers using expert mode.
+
+[View update](https://replit.slack.com/archives/C05KHJEGZQX/p1761933520916779?thread_ts=1761933520.916779&cid=C05KHJEGZQX)
+
+Learn more about [Replit Agent](/replitai/general-agent).
+
+### Secure MCP authentication proxy
+
+All MCP (Model Context Protocol) traffic is now securely proxied, ensuring Agent never directly handles user tokens for MCP authentication. This infrastructure improvement enhances security for all connector and MCP integrations.
+
+[View update](https://replit.slack.com/archives/C05KHJEGZQX/p1761931786785609?thread_ts=1761931786.785609&cid=C05KHJEGZQX)
+
+Learn more about [MCP on Replit](/tutorials/mcp-in-3) and [Agent integrations](/replitai/integrations).
+
+### Custom domain verification improvements
+
+Custom domain verification is now faster and more reliable, with automatic retries when issues occur. The redesigned interface gives you clearer status tracking and visibility into your connected domains, making it easier to diagnose and resolve configuration issues at a glance. You'll also get better error messages to help you fix DNS issues quickly.
+
+[View update](https://replit.slack.com/archives/C05KHJEGZQX/p1761859667056069?thread_ts=1761859667.056069&cid=C05KHJEGZQX)
+
+Learn more about [custom domains](/cloud-services/deployments/custom-domains) and [deployment monitoring](/cloud-services/deployments/monitoring-a-deployment).
+
+## Teams and Enterprise
+
+* [Analytics dashboard for Enterprise admins](#analytics-dashboard-for-enterprise-admins)
+
+### Analytics dashboard for Enterprise admins
+
+Enterprise organizations now have access to a comprehensive analytics dashboard to monitor user activity, track resource usage and costs by user and repl, measure engagement and collaboration, and monitor deployment activity. This addresses key requirements from enterprise customers for visibility and governance.
+
+[View update](https://replit.slack.com/archives/C05KHJEGZQX/p1761927566421109?thread_ts=1761927566.421109&cid=C05KHJEGZQX)
+
+Learn more about [Enterprise features](/category/teams) and [managing members](/teams/identity-and-access-management/managing-members).
