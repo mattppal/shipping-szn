@@ -29,6 +29,7 @@ Skills provide domain expertise through progressive disclosure - loading content
 - **brand-writing** (`skills/brand-writing/`): Replit's brand voice and writing guidelines
 - **changelog-formatting** (`skills/changelog-formatting/`): Template structure and formatting rules
 - **doc-quality** (`skills/doc-quality/`): Documentation quality review criteria
+- **media-insertion** (`skills/media-insertion/`): How to insert images and videos from Slack into markdown
 
 **Benefits:**
 - Reduced context window usage (each skill ~100 tokens metadata vs thousands embedded)

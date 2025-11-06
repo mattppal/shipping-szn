@@ -107,14 +107,15 @@ async def main():
                     Process:
                     1. Use fetch_messages_from_channel (channel_id, days_back=7) to fetch Slack messages
                     2. Extract product changes, summarize crisply, group logically
-                    3. Include Slack message permalink for each entry
-                    4. Create ./docs/updates/YYYY-MM-DD.md (today's date)
-                    5. Add relevant Replit docs links (relative paths only)
-                    6. Focus on content quality - template_formatter handles structure
+                    3. **IMPORTANT**: Insert media files into content - check the Slack response for processed_files and add image references using ./media/YYYY-MM-DD/filename paths
+                    4. Include Slack message permalink for each entry
+                    5. Create ./docs/updates/YYYY-MM-DD.md (today's date)
+                    6. Add relevant Replit docs links (relative paths only)
+                    7. Focus on content quality - template_formatter handles structure
                     
                     Rules: Only read/write .md files. Only make edits that change content.
 
-                    You have access to skills for brand writing and documentation quality. Use them when needed.
+                    You have access to skills for brand writing, documentation quality, and media insertion. The media-insertion skill shows you exactly how to add images from Slack into the markdown.
                 """,
                 model="sonnet",
                 tools=permission_groups["changelog_writer"],

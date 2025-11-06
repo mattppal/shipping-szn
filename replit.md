@@ -61,6 +61,12 @@ Skills provide reusable domain expertise loaded on-demand via progressive disclo
 - GOOD_DOCS.md: Complete documentation best practices
 - Used by: review_and_feedback agent
 
+**`media-insertion` (skills/media-insertion/):**
+- SKILL.md: Complete guide for inserting Slack media into markdown
+- Teaches agents how to reference downloaded images/videos
+- Shows path format, alt text, and placement best practices
+- Used by: changelog_writer agent (primary), template_formatter agent
+
 **Adding New Skills:**
 1. Create directory: `skills/skill-name/`
 2. Add SKILL.md with YAML frontmatter and quick reference
