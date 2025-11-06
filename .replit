@@ -28,3 +28,6 @@ args = "uv run python main.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
+
+[deployment]
+deploymentTarget = "scheduled"
