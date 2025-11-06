@@ -46,28 +46,43 @@ Each section should have:
 - Bullet summaries at top: `* [Update Name]`
 - Detailed sections below: `### [Update Name]` with full content
 
-### 4. Format Media
+### 4. Format Media (CRITICAL)
 
-Convert local media paths to public paths:
-```
-./media/YYYY-MM-DD/filename → /images/changelog/YYYY-MM-DD/filename
-```
+**Process for each media reference:**
 
-Wrap all media in `<Frame>` tags:
+1. **Verify the file exists first:**
+   - Check if `./docs/updates/media/YYYY-MM-DD/filename` exists on the filesystem
+   - If the file doesn't exist, REMOVE the reference from the markdown
+   - Only process media that actually exists
 
-**Images:**
-```jsx
-<Frame>
-  <img src="/images/changelog/2025-01-15/feature.png" alt="Descriptive alt text" />
-</Frame>
-```
+2. **Convert local paths to public CDN paths:**
+   ```
+   ./media/YYYY-MM-DD/filename → /images/changelog/YYYY-MM-DD/filename
+   ```
 
-**Videos:**
-```jsx
-<Frame>
-  <video src="/images/changelog/2025-01-15/demo.mp4" controls />
-</Frame>
-```
+3. **Wrap in `<Frame>` tags with proper syntax:**
+
+   **For Images** (.png, .jpg, .jpeg, .gif, .webp):
+   ```jsx
+   <Frame>
+     <img src="/images/changelog/2025-01-15/feature.png" alt="Descriptive alt text" />
+   </Frame>
+   ```
+
+   **For Videos** (.mp4, .mov, .webm):
+   ```jsx
+   <Frame>
+     <video src="/images/changelog/2025-01-15/demo.mp4" controls />
+   </Frame>
+   ```
+
+4. **Preserve descriptive alt text from the original markdown**
+
+**Common Path Mistakes:**
+- ❌ `./media/2025-01-15/file.png` (local path - wrong in final output)
+- ❌ `./docs/updates/media/2025-01-15/file.png` (full local path - wrong)
+- ❌ `/media/2025-01-15/file.png` (missing "images/changelog" - wrong)
+- ✅ `/images/changelog/2025-01-15/file.png` (correct CDN path)
 
 ## For Complete Reference
 

@@ -44,16 +44,27 @@ More details about the feature...
 
 **Important:**
 - Use the **local path** format: `./media/YYYY-MM-DD/filename`
-- Write descriptive alt text that explains what the image shows
+- Write descriptive alt text that explains what the image shows (be specific, not generic)
 - Place images where they make sense contextually (after introducing the feature)
-- For videos, use the same markdown image syntax - the formatter will convert it to video tags
+- **Only reference images that actually exist in the Slack response** - check the file paths shown
+- For videos (.mp4, .mov, .webm), use the same markdown syntax
 
-## Step 3: Template Formatter Handles Conversion
+## Step 3: Verify Images Before Inserting
+
+Before adding an image reference to your markdown:
+1. Check the Slack tool response for the exact filename
+2. Verify the path matches: `./docs/updates/media/YYYY-MM-DD/filename`
+3. Use that exact filename in your markdown reference: `./media/YYYY-MM-DD/filename`
+
+**DO NOT** insert image references for files that weren't downloaded or don't appear in the Slack response.
+
+## Step 4: Template Formatter Converts to Final Format
 
 The `template_formatter` agent will later:
-1. Convert paths: `./media/YYYY-MM-DD/filename` → `/images/changelog/YYYY-MM-DD/filename`
-2. Wrap in Frame tags: `<Frame><img src="..." alt="..." /></Frame>`
-3. Convert video references to video tags
+1. Verify each image file exists at `./docs/updates/media/YYYY-MM-DD/filename`
+2. Convert paths: `./media/YYYY-MM-DD/filename` → `/images/changelog/YYYY-MM-DD/filename`
+3. Wrap in Frame tags: `<Frame><img src="/images/changelog/..." alt="..." /></Frame>`
+4. Convert video references to: `<Frame><video src="/images/changelog/..." controls /></Frame>`
 
 ## Examples
 

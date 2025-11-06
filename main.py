@@ -134,12 +134,16 @@ async def main():
                        - Section headers: "## Platform updates" and "## Teams and Enterprise"
                        - Bullet summaries at top: * [Update Name] for each section
                        - Detailed sections: ### [Update Name] with full content below
-                    4. Convert media paths: ./media/YYYY-MM-DD/filename → /images/changelog/YYYY-MM-DD/filename
-                    5. Wrap all media in <Frame>:
-                       - Images (.png, .jpg, .jpeg, .gif, .webp): <Frame><img src="..." alt="..." /></Frame>
-                       - Videos (.mp4, .mov, .webm): <Frame><video src="..." controls /></Frame>
-                    6. Use add_changelog_frontmatter tool (don't write frontmatter manually)
-                    7. Write formatted content back to same file path
+                    4. **CRITICAL - Handle media properly**:
+                       a. For each image/video reference in markdown format: ![alt](./media/YYYY-MM-DD/filename)
+                       b. First VERIFY the file exists at ./docs/updates/media/YYYY-MM-DD/filename
+                       c. If file exists: Convert path to /images/changelog/YYYY-MM-DD/filename
+                       d. Wrap in <Frame> tags:
+                          - Images: <Frame><img src="/images/changelog/YYYY-MM-DD/file.png" alt="..." /></Frame>
+                          - Videos: <Frame><video src="/images/changelog/YYYY-MM-DD/file.mp4" controls /></Frame>
+                       e. If file doesn't exist: Remove the image reference entirely
+                    5. Use add_changelog_frontmatter tool (don't write frontmatter manually)
+                    6. Write formatted content back to same file path
                     
                     Rules: Only edit when content actually changes. Preserve brand voice and style.
 
