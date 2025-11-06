@@ -114,18 +114,7 @@ async def main():
                     
                     Rules: Only read/write .md files. Only make edits that change content.
 
-                    <changelog_criteria>
-                        {open('./prompts/good_docs.md').read()}
-                    </changelog_criteria>
-
-                    <brand_guidelines>
-                        {open('./prompts/brand_guidelines.md').read()}
-                    </brand_guidelines>
-
-                    <docs_style_guide>
-                        {open('./prompts/docs_style_guide.md').read()}
-                    </docs_style_guide>
-
+                    You have access to skills for brand writing and documentation quality. Use them when needed.
                 """,
                 model="sonnet",
                 tools=permission_groups["changelog_writer"],
@@ -153,45 +142,21 @@ async def main():
                     
                     Rules: Only edit when content actually changes. Preserve brand voice and style.
 
-                    <changelog_template>
-                        {open('./prompts/changelog_template.md').read()}
-                    </changelog_template>
-
-                    <brand_guidelines>
-                        {open('./prompts/brand_guidelines.md').read()}
-                    </brand_guidelines>
-
-                    <docs_style_guide>
-                        {open('./prompts/docs_style_guide.md').read()}
-                    </docs_style_guide>
+                    You have access to the changelog-formatting skill with complete template and style guidelines. Use it for reference.
                 """,
                 model="sonnet",
                 tools=permission_groups["template_formatter"],
             ),
             "review_and_feedback": AgentDefinition(
                 description="Use this agent to review copy and provide feedback on the PR",
-                prompt=f"""
+                prompt="""
                     Review changelog for clarity, tone, correctness, and developer experience.
                     Provide actionable suggestions and improved wording when needed.
                     
                     Review: Brand voice, technical accuracy, link validity, template compliance, content quality.
                     Rules: Only read/write .md files. Only edit when content changes.
 
-                    <brand_guidelines>
-                        {open('./prompts/brand_guidelines.md').read()}
-                    </brand_guidelines>
-
-                    <docs_style_guide>
-                        {open('./prompts/docs_style_guide.md').read()}
-                    </docs_style_guide>
-
-                    <changelog_criteria>
-                        {open('./prompts/good_docs.md').read()}
-                    </changelog_criteria>
-
-                    <changelog_template>
-                        {open('./prompts/changelog_template.md').read()}
-                    </changelog_template>
+                    You have access to skills for brand writing, documentation quality, and changelog formatting. Use them to guide your review.
                 """,
                 model="haiku",
                 tools=[
