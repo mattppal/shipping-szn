@@ -18,3 +18,4 @@ docs/**/*/**
 .claude/**
 node_modules/
 .DS_Store
+attached_assets/
