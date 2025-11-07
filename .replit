@@ -31,3 +31,4 @@ outputType = "console"
 
 [deployment]
 deploymentTarget = "scheduled"
+run = ["sh", "-c", "uv run main.py"]
