@@ -111,7 +111,7 @@ You can customize `replit.md` to help Replit's Agent better understand your proj
 
 To deploy this project on Replit:
 
-1. **Import the Project**: Import this repository into Replit using the "Import from GitHub" option or by cloning the repository.
+1. **Remix the Template**: [Remix this template on Replit](https://replit.com/@matt/shipping-szn?utm_source=Matt&utm_medium=github&utm_campaign=shipping-szn) to create your own copy with all dependencies and configuration pre-configured.
 
 2. **Configure Environment Variables**: Set up the required environment variables (see [Environment Variables](#environment-variables)) in Replit's Secrets tab:
    - `GITHUB_TOKEN`

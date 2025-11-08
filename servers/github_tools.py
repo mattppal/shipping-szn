@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+from collections import OrderedDict
 from datetime import datetime
 from typing import Any, Dict, Optional
 
@@ -33,17 +34,122 @@ if not GITHUB_REPO:
 github_client = Github(GITHUB_TOKEN)
 
 DOCS_JSON_PATH = "docs/docs.json"
+CHANGELOG_ANCHOR_NAME = "Changelog"
+CHANGELOG_ICON = "clock-rotate-left"
+FILE_MODE_REGULAR = "100644"
+MAX_RETRIES = 3
 
 
-def get_repo():
-    """Get the configured GitHub repository."""
-    return github_client.get_repo(GITHUB_REPO)
+def _error_response(message: str) -> Dict[str, Any]:
+    """Create standardized error response format."""
+    return {
+        "content": [{"type": "text", "text": message}],
+        "is_error": True,
+    }
+
+
+def _parse_date_from_args(
+    args: Dict[str, Any], changelog_path: Optional[str]
+) -> Dict[str, str]:
+    """Parse date from args or changelog path."""
+    date_override = args.get("date_override")
+    if date_override:
+        match = re.match(r"(\d{4})-(\d{2})-(\d{2})", date_override)
+        if match:
+            return {
+                "year": match.group(1),
+                "month": match.group(2),
+                "day": match.group(3),
+            }
+        else:
+            raise ValueError("date_override must be in format YYYY-MM-DD")
+    elif changelog_path:
+        date_info = parse_changelog_path(changelog_path)
+        if not date_info:
+            raise ValueError(
+                f"Could not parse date from path: {changelog_path}. Use date_override parameter."
+            )
+        return date_info
+    else:
+        today = datetime.now()
+        return {
+            "year": today.strftime("%Y"),
+            "month": today.strftime("%m"),
+            "day": today.strftime("%d"),
+        }
+
+
+def _discover_media_files(date_str: str, referenced_filenames: set) -> list[str]:
+    """Discover media files in the media directory."""
+    media_dir = f"./docs/updates/media/{date_str}"
+    discovered_files = []
+    if os.path.exists(media_dir) and os.path.isdir(media_dir):
+        for filename in os.listdir(media_dir):
+            file_path = os.path.join(media_dir, filename)
+            if os.path.isfile(file_path):
+                discovered_files.append(file_path)
+
+    if referenced_filenames:
+        found_filenames = {os.path.basename(f) for f in discovered_files}
+        missing_refs = referenced_filenames - found_filenames
+
+        if missing_refs:
+            media_base = "./docs/updates/media"
+            if os.path.exists(media_base):
+                for date_dir in os.listdir(media_base):
+                    date_dir_path = os.path.join(media_base, date_dir)
+                    if os.path.isdir(date_dir_path):
+                        for filename in os.listdir(date_dir_path):
+                            if filename in missing_refs:
+                                file_path = os.path.join(date_dir_path, filename)
+                                if os.path.isfile(file_path):
+                                    discovered_files.append(file_path)
+
+    return discovered_files
+
+
+def _validate_media_references(
+    referenced_filenames: set, found_referenced_files: set
+) -> Optional[str]:
+    """Validate that all referenced media files exist."""
+    if referenced_filenames:
+        missing_files = referenced_filenames - found_referenced_files
+        if missing_files:
+            missing_list = ", ".join(sorted(missing_files)[:5])
+            if len(missing_files) > 5:
+                missing_list += f" and {len(missing_files) - 5} more"
+            return (
+                f"Error: Changelog references {len(missing_files)} media files "
+                f"that don't exist locally: {missing_list}. "
+                f"Please ensure all referenced media files are downloaded "
+                f"before creating the PR."
+            )
+    return None
+
+
+def _group_changelogs_by_month(
+    unique_changelogs: list[Dict[str, str]],
+) -> OrderedDict[str, list[str]]:
+    """Group changelogs by month and year."""
+    grouped_changelogs: OrderedDict[str, list[str]] = OrderedDict()
+    for cl in unique_changelogs:
+        month_name = datetime.strptime(cl["month"], "%m").strftime("%B")
+        group_key = f"{month_name} {cl['year']}"
+        if group_key not in grouped_changelogs:
+            grouped_changelogs[group_key] = []
+        grouped_changelogs[group_key].append(cl["path"])
+    return grouped_changelogs
 
 
 def create_branch_name(prefix: str = "changelog") -> str:
     """Create a unique branch name with timestamp."""
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     return f"{prefix}/{timestamp}"
+
+
+def get_repo():
+    """Get the configured GitHub repository."""
+    return github_client.get_repo(GITHUB_REPO)
 
 
 def parse_changelog_path(changelog_path: str) -> Optional[Dict[str, str]]:
@@ -96,7 +202,7 @@ This PR is created as a draft to allow for human review before publishing.
 
 
 async def create_commit_with_files(
-    repo,
+    repo: Any,
     branch_name: str,
     files: Dict[str, bytes],
     commit_message: str,
@@ -136,7 +242,7 @@ async def create_commit_with_files(
                 tree_entries.append(
                     {
                         "path": file_path,
-                        "mode": "100644",
+                        "mode": FILE_MODE_REGULAR,
                         "type": "blob",
                         "sha": blob_sha,
                     }
@@ -188,7 +294,7 @@ async def create_commit_with_files(
 
 
 async def upload_media_file(
-    repo, local_path: str, date_str: str, branch_name: str
+    repo: Any, local_path: str, date_str: str, branch_name: str
 ) -> Optional[str]:
     """Upload a single media file to the repository.
 
@@ -216,7 +322,7 @@ async def upload_media_file(
         loop = asyncio.get_event_loop()
 
         def upload_or_update():
-            max_retries = 3
+            max_retries = MAX_RETRIES
             for attempt in range(max_retries):
                 try:
                     existing_file = repo.get_contents(remote_path, ref=branch_name)
@@ -274,6 +380,7 @@ async def upload_media_file(
         await loop.run_in_executor(None, upload_or_update)
         return remote_path
     except Exception as e:
+        logger.error(f"Error uploading media file {local_path}: {str(e)}")
         return None
 
 
@@ -295,7 +402,7 @@ def update_docs_json_content(docs_content: str, year: str, month: str, day: str)
 
     changelog_anchor = None
     for anchor in docs_data.get("navigation", {}).get("anchors", []):
-        if anchor.get("anchor") == "Changelog":
+        if anchor.get("anchor") == CHANGELOG_ANCHOR_NAME:
             changelog_anchor = anchor
             for group in anchor.get("groups", []):
                 for page_entry in group.get("pages", []):
@@ -344,18 +451,10 @@ def update_docs_json_content(docs_content: str, year: str, month: str, day: str)
         )
     )
 
-    from collections import OrderedDict
-
-    grouped_changelogs = OrderedDict()
-    for cl in unique_changelogs:
-        month_name = datetime.strptime(cl["month"], "%m").strftime("%B")
-        group_key = f"{month_name} {cl['year']}"
-        if group_key not in grouped_changelogs:
-            grouped_changelogs[group_key] = []
-        grouped_changelogs[group_key].append(cl["path"])
+    grouped_changelogs = _group_changelogs_by_month(unique_changelogs)
 
     if changelog_anchor:
-        changelog_anchor["icon"] = "clock-rotate-left"
+        changelog_anchor["icon"] = CHANGELOG_ICON
         changelog_anchor["description"] = "Latest updates and changes"
         changelog_anchor["groups"] = []
 
@@ -393,29 +492,13 @@ async def add_changelog_frontmatter(args: Dict[str, Any]) -> Dict[str, Any]:
         date_str = args.get("date")
 
         if not date_str:
-            return {
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "Error: date is required (format: YYYY-MM-DD)",
-                    }
-                ],
-                "is_error": True,
-            }
+            return _error_response("Error: date is required (format: YYYY-MM-DD)")
 
         try:
             date_obj = datetime.strptime(date_str, "%Y-%m-%d")
             formatted_date = date_obj.strftime("%B %d, %Y")
         except ValueError:
-            return {
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "Error: date must be in format YYYY-MM-DD",
-                    }
-                ],
-                "is_error": True,
-            }
+            return _error_response("Error: date must be in format YYYY-MM-DD")
 
         frontmatter = f"""---
 title: {formatted_date}
@@ -445,10 +528,7 @@ import {{ AuthorCard }} from '/snippets/author-card.mdx';
         }
 
     except Exception as e:
-        return {
-            "content": [{"type": "text", "text": f"Unexpected error: {str(e)}"}],
-            "is_error": True,
-        }
+        return _error_response(f"Unexpected error: {str(e)}")
 
 
 @tool(
@@ -505,69 +585,21 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
         changelog_content = args.get("changelog_content")
 
         if not changelog_path and not changelog_content:
-            return {
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "Error: Either changelog_path or changelog_content must be provided",
-                    }
-                ],
-                "is_error": True,
-            }
+            return _error_response(
+                "Error: Either changelog_path or changelog_content must be provided"
+            )
 
         if changelog_path and not changelog_content:
             try:
                 with open(changelog_path, "r") as f:
                     changelog_content = f.read()
             except Exception as e:
-                return {
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": f"Error reading changelog file: {str(e)}",
-                        }
-                    ],
-                    "is_error": True,
-                }
+                return _error_response(f"Error reading changelog file: {str(e)}")
 
-        date_override = args.get("date_override")
-        if date_override:
-            match = re.match(r"(\d{4})-(\d{2})-(\d{2})", date_override)
-            if match:
-                date_info = {
-                    "year": match.group(1),
-                    "month": match.group(2),
-                    "day": match.group(3),
-                }
-            else:
-                return {
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "Error: date_override must be in format YYYY-MM-DD",
-                        }
-                    ],
-                    "is_error": True,
-                }
-        elif changelog_path:
-            date_info = parse_changelog_path(changelog_path)
-            if not date_info:
-                return {
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": f"Error: Could not parse date from path: {changelog_path}. Use date_override parameter.",
-                        }
-                    ],
-                    "is_error": True,
-                }
-        else:
-            today = datetime.now()
-            date_info = {
-                "year": today.strftime("%Y"),
-                "month": today.strftime("%m"),
-                "day": today.strftime("%d"),
-            }
+        try:
+            date_info = _parse_date_from_args(args, changelog_path)
+        except ValueError as e:
+            return _error_response(f"Error: {str(e)}")
 
         year = date_info["year"]
         month = date_info["month"]
@@ -593,43 +625,12 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
         media_files = args.get("media_files", [])
 
         if media_files and not isinstance(media_files, list):
-            return {
-                "content": [
-                    {
-                        "type": "text",
-                        "text": f"Error: media_files must be a list, got {type(media_files).__name__}. Value: {repr(media_files)}",
-                    }
-                ],
-                "is_error": True,
-            }
+            return _error_response(
+                f"Error: media_files must be a list, got {type(media_files).__name__}. Value: {repr(media_files)}"
+            )
 
         if not media_files:
-            media_dir = f"./docs/updates/media/{date_str}"
-            discovered_files = []
-            if os.path.exists(media_dir) and os.path.isdir(media_dir):
-                for filename in os.listdir(media_dir):
-                    file_path = os.path.join(media_dir, filename)
-                    if os.path.isfile(file_path):
-                        discovered_files.append(file_path)
-
-            if referenced_filenames:
-                found_filenames = {os.path.basename(f) for f in discovered_files}
-                missing_refs = referenced_filenames - found_filenames
-
-                if missing_refs:
-                    media_base = "./docs/updates/media"
-                    if os.path.exists(media_base):
-                        for date_dir in os.listdir(media_base):
-                            date_dir_path = os.path.join(media_base, date_dir)
-                            if os.path.isdir(date_dir_path):
-                                for filename in os.listdir(date_dir_path):
-                                    if filename in missing_refs:
-                                        file_path = os.path.join(
-                                            date_dir_path, filename
-                                        )
-                                        if os.path.isfile(file_path):
-                                            discovered_files.append(file_path)
-
+            discovered_files = _discover_media_files(date_str, referenced_filenames)
             if discovered_files:
                 media_files = discovered_files
 
@@ -650,38 +651,14 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
                 except Exception:
                     pass
 
-        if referenced_filenames:
-            missing_files = referenced_filenames - found_referenced_files
-            if missing_files:
-                missing_list = ", ".join(sorted(missing_files)[:5])
-                if len(missing_files) > 5:
-                    missing_list += f" and {len(missing_files) - 5} more"
-                error_msg = (
-                    f"Error: Changelog references {len(missing_files)} media files "
-                    f"that don't exist locally: {missing_list}. "
-                    f"Please ensure all referenced media files are downloaded "
-                    f"before creating the PR."
-                )
-                return {
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": error_msg,
-                        }
-                    ],
-                    "is_error": True,
-                }
+        validation_error = _validate_media_references(
+            referenced_filenames, found_referenced_files
+        )
+        if validation_error:
+            return _error_response(validation_error)
 
         if not changelog_content:
-            return {
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "Error: Changelog content is empty",
-                    }
-                ],
-                "is_error": True,
-            }
+            return _error_response("Error: Changelog content is empty")
         changelog_remote_path = f"docs/updates/{year}/{month}/{day}/changelog.mdx"
         files_to_commit[changelog_remote_path] = changelog_content.encode("utf-8")
 
@@ -707,15 +684,7 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
             )
 
             if not commit_sha:
-                return {
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "Error: Failed to create commit with files.",
-                        }
-                    ],
-                    "is_error": True,
-                }
+                return _error_response("Error: Failed to create commit with files.")
 
             uploaded_files = list(files_to_commit.keys())
 
@@ -737,7 +706,7 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
             pass
 
         uploaded_files = list(files_to_commit.keys())
-        summary = f"Successfully created changelog PR\n\n"
+        summary = "Successfully created changelog PR\n\n"
         summary += f"Date: {date_str}\n"
         summary += f"Branch: {branch_name}\n"
         summary += f"PR URL: {pr.html_url}\n"
@@ -759,12 +728,6 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     except GithubException as e:
-        return {
-            "content": [{"type": "text", "text": f"GitHub API Error: {str(e)}"}],
-            "is_error": True,
-        }
+        return _error_response(f"GitHub API Error: {str(e)}")
     except Exception as e:
-        return {
-            "content": [{"type": "text", "text": f"Unexpected error: {str(e)}"}],
-            "is_error": True,
-        }
+        return _error_response(f"Unexpected error: {str(e)}")

@@ -1,7 +1,6 @@
 """Simple, standalone Slack tools for Claude Agent SDK."""
 
 import hashlib
-import logging
 import mimetypes
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -18,10 +17,6 @@ from slack_sdk.errors import SlackApiError
 
 load_dotenv()
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 SLACK_TOKEN = os.getenv("SLACK_TOKEN")
 if not SLACK_TOKEN:
     raise ValueError("SLACK_TOKEN is not set")
@@ -31,6 +26,8 @@ slack_client = WebClient(token=SLACK_TOKEN)
 MAX_FILE_SIZE = 100 * 1024 * 1024
 MEDIA_BASE_DIR = "./docs/updates/media"
 MAX_CONCURRENT_DOWNLOADS = 5
+MAX_TEXT_PREVIEW_LENGTH = 300
+DEFAULT_DAYS_BACK = 7
 
 
 def sanitize_filename(filename: str) -> str:
@@ -179,9 +176,7 @@ def process_message_files(
     if not files:
         return []
 
-    start_time = datetime.now()
     processed_files = []
-    failed_files = []
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_file = {
@@ -194,12 +189,11 @@ def process_message_files(
                 result = future.result()
                 if result:
                     processed_files.append(result)
-                else:
-                    file = future_to_file[future]
-                    failed_files.append(file.get("name", "unknown"))
-            except Exception:
+            except Exception as e:
                 file = future_to_file[future]
-                failed_files.append(file.get("name", "unknown"))
+                logger.error(
+                    f"Failed to download file {file.get('name', 'unknown')}: {str(e)}"
+                )
 
     return processed_files
 
@@ -224,7 +218,7 @@ async def fetch_messages_from_channel(args: dict[str, Any]) -> dict[str, Any]:
 
     try:
         channel_id = args.get("channel_id")
-        days_back = int(args.get("days_back", 7))
+        days_back = int(args.get("days_back", DEFAULT_DAYS_BACK))
 
         if not channel_id:
             return {
@@ -276,21 +270,20 @@ async def fetch_messages_from_channel(args: dict[str, Any]) -> dict[str, Any]:
         skipped_files = 0
         downloaded_files = 0
         for msg in messages:
-            files_count = len(msg.get("processed_files", []))
             for file in msg.get("processed_files", []):
+                total_files += 1
                 if file.get("skipped"):
                     skipped_files += 1
                 else:
                     downloaded_files += 1
             if msg.get("replies"):
                 for reply in msg["replies"]:
-                    files_count += len(reply.get("processed_files", []))
                     for file in reply.get("processed_files", []):
+                        total_files += 1
                         if file.get("skipped"):
                             skipped_files += 1
                         else:
                             downloaded_files += 1
-            total_files += files_count
 
         summary += f"Total media files: {total_files}\n"
         if skip_existing:
@@ -307,8 +300,8 @@ async def fetch_messages_from_channel(args: dict[str, Any]) -> dict[str, Any]:
             summary += f"   Timestamp: {datetime.fromtimestamp(float(msg.get('ts', 0))).strftime('%Y-%m-%d %H:%M:%S')}\n"
 
             text = msg.get("text", "")
-            if len(text) > 300:
-                summary += f"   Text: {text[:300]}...\n"
+            if len(text) > MAX_TEXT_PREVIEW_LENGTH:
+                summary += f"   Text: {text[:MAX_TEXT_PREVIEW_LENGTH]}...\n"
             else:
                 summary += f"   Text: {text}\n"
 

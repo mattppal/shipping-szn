@@ -7,9 +7,12 @@ from claude_agent_sdk import (
     ToolUseBlock,
     UserMessage,
 )
+from typing import Union
 
 
-def display_message(msg):
+def display_message(
+    msg: Union[UserMessage, AssistantMessage, SystemMessage, ResultMessage],
+) -> None:
     """Display message content in a clean format."""
 
     if isinstance(msg, UserMessage):

@@ -13,6 +13,9 @@ from util.messages import display_message
 
 load_dotenv()
 
+DEFAULT_DAYS_BACK = 7
+CHANGELOG_FILE_PATTERN = "./docs/updates/{date}.md"
+
 
 permissions = {
     # read/write/edit/glob docs (excluding media files)
@@ -33,10 +36,10 @@ permissions = {
 }
 
 
-def get_today_changelog_permissions():
+def get_today_changelog_permissions() -> list[str]:
     """Get permissions restricted to today's changelog file only."""
     today = datetime.now().strftime("%Y-%m-%d")
-    changelog_file = f"./docs/updates/{today}.md"
+    changelog_file = CHANGELOG_FILE_PATTERN.format(date=today)
     return [
         f"Read({changelog_file})",
         f"Write({changelog_file})",
@@ -93,7 +96,6 @@ Assume subagents have all relevant information required to begin work.
 
 
 async def main():
-
     options = ClaudeAgentOptions(
         agents={
             "changelog_writer": AgentDefinition(
@@ -101,11 +103,11 @@ async def main():
                 prompt=f"""
                     You are a changelog writer. Create this week's changelog from Slack updates and related docs.
 
-                    Time window: {(datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')} to {datetime.now().strftime('%Y-%m-%d')}
+                    Time window: {(datetime.now() - timedelta(days=DEFAULT_DAYS_BACK)).strftime('%Y-%m-%d')} to {datetime.now().strftime('%Y-%m-%d')}
                     Slack channel ID: {os.getenv('SLACK_CHANNEL_ID')}
 
                     Process:
-                    1. Use fetch_messages_from_channel (channel_id, days_back=7) to fetch Slack messages
+                    1. Use fetch_messages_from_channel (channel_id, days_back={DEFAULT_DAYS_BACK}) to fetch Slack messages
                     2. Extract product changes, summarize crisply, group logically
                     3. **IMPORTANT**: Insert media files into content - check the Slack response for processed_files and add image references using ./media/YYYY-MM-DD/filename paths
                     4. Include Slack message permalink for each entry

@@ -1,11 +1,11 @@
 import os
-import dotenv
+from dotenv import load_dotenv
 from claude_agent_sdk.types import McpHttpServerConfig
 from claude_agent_sdk import create_sdk_mcp_server
 from servers.slack_tools import fetch_messages_from_channel
 from servers.github_tools import create_changelog_pr, add_changelog_frontmatter
 
-dotenv.load_dotenv()
+load_dotenv()
 
 MCP_SERVERS = {
     "github": McpHttpServerConfig(
