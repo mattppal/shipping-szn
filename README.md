@@ -48,8 +48,28 @@ AI-powered changelog automation using Claude Agent SDK. Automates fetching Slack
 - Python 3.13+
 - `uv` package manager
 - Mintlify documentation site repository
-- GitHub personal access token
-- Slack bot token
+- GitHub personal access token with `repo` scope
+- Anthropic API key
+- Slack bot with appropriate permissions (see below)
+
+### Slack Bot Setup
+
+Create a Slack app at [api.slack.com/apps](https://api.slack.com/apps) with these bot token scopes:
+- `channels:history`, `channels:read`, `files:read`, `users:read`
+
+Install to workspace, copy the bot token (starts with `xoxb-`), invite the bot to your channel, and get the channel ID from channel details.
+
+**Learn more:** [Slack Bot Setup Guide](https://api.slack.com/start/building/bolt-python)
+
+### GitHub Token Setup
+
+Create a personal access token at [github.com/settings/tokens](https://github.com/settings/tokens) with `repo` scope.
+
+**Learn more:** [GitHub token documentation](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token)
+
+### Anthropic API Key
+
+Get your API key from [console.anthropic.com](https://console.anthropic.com/). See [Anthropic docs](https://docs.anthropic.com/) for details.
 
 ### Environment Variables
 
@@ -57,11 +77,12 @@ Set these required variables:
 
 | Variable | Description |
 |---------|-------------|
-| `GITHUB_TOKEN` | GitHub personal access token |
-| `GITHUB_REPO` | Repository name (e.g., "replit/docs") |
-| `SLACK_TOKEN` | Slack bot token |
-| `SLACK_CHANNEL_ID` | Slack channel ID to monitor |
-| `ORCHESTRATOR_MODEL` | Claude model (e.g., "sonnet") |
+| `ANTHROPIC_API_KEY` | Anthropic API key for Claude Agent SDK |
+| `GITHUB_TOKEN` | GitHub personal access token with repo access |
+| `GITHUB_REPO` | Repository name (e.g., "your-org/your-repo") |
+| `SLACK_TOKEN` | Slack bot token (starts with `xoxb-`) |
+| `SLACK_CHANNEL_ID` | Slack channel ID to monitor (starts with `C`) |
+| `ORCHESTRATOR_MODEL` | Claude model (e.g., "claude-sonnet-4-5") |
 
 ### Installation
 
@@ -221,3 +242,11 @@ Edit files in `skills/*/`. Changes take effect on next run without restart.
 - [Claude Agent SDK MCP Integration](https://docs.anthropic.com/claude/docs/mcp-integration)
 - [Creating Custom MCP Servers](https://docs.anthropic.com/claude/docs/mcp-integration#custom-mcp-servers)
 - [GitHub MCP Server](https://github.com/modelcontextprotocol/servers/tree/main/src/github)
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## Contributing
+
+This project was built for a specific use case but can be adapted for other organizations. Contributions that make the project more flexible and easier to customize are welcome!
