@@ -1,8 +1,3 @@
-NOTE: These guidelines are maintained in Notion, this copy is used for quick access with AI tooling.
-https://www.notion.so/replit/Brand-Writing-Guidelines-160f7a820bb1801e98cad82321286ed8?pvs=4
-
----
-
 # Voice and Tone
 
 ## Core brand voice

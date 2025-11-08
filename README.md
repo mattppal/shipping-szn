@@ -2,7 +2,7 @@
 
 AI-powered changelog automation using Claude Agent SDK. Automates fetching Slack updates, writing changelog content, formatting, review, and GitHub PR creation.
 
-**Important:** Designed for Mintlify documentation sites. Customize paths and structure in `servers/github_tools.py` and `main.py`.
+**Important:** This project is designed for Mintlify documentation sites and includes opinionated templates and formatting. You'll need to customize paths, structure, and brand guidelines in `servers/github_tools.py`, `main.py`, and `skills/` directories to match your organization's needs.
 
 ## Table of Contents
 
@@ -21,6 +21,13 @@ AI-powered changelog automation using Claude Agent SDK. Automates fetching Slack
    ```
 
 2. **Set environment variables:**
+   
+   Copy `.env.example` to `.env` and fill in your values:
+   ```bash
+   cp .env.example .env
+   ```
+   
+   Then edit `.env` with your credentials:
    ```bash
    GITHUB_TOKEN=your_token
    GITHUB_REPO=your-org/repo-name
@@ -82,10 +89,12 @@ Four specialized agents handle different tasks:
 
 Skills provide domain expertise loaded on-demand:
 
-- **brand-writing**: Brand voice and writing guidelines
+- **brand-writing**: Brand voice and writing guidelines (customize for your organization)
 - **changelog-formatting**: Template structure and formatting rules
 - **doc-quality**: Documentation quality review criteria
 - **media-insertion**: How to insert images and videos from Slack
+
+**Note:** The included skills contain example guidelines. You should replace these with your own organization's brand voice, style guides, and documentation standards.
 
 Skills reduce context window usage (~100 tokens metadata vs thousands embedded).
 
@@ -106,9 +115,16 @@ Custom MCP servers (`slack_updates`, `github_changelog`) use `create_sdk_mcp_ser
 
 ## Customization
 
-### Mintlify Configuration
+This project is opinionated and designed for a specific workflow. To adapt it for your organization:
 
-Update these functions in `servers/github_tools.py`:
+### Required Customization
+
+1. **Brand Guidelines** (`skills/brand-writing/BRAND_GUIDELINES.md`)
+   - Replace with your organization's brand voice and style guide
+   - Update product names, terminology, and messaging
+
+2. **Documentation Structure** (`servers/github_tools.py`)
+   - Update these functions to match your documentation site structure:
 
 | Function | What to Change |
 |----------|----------------|
@@ -118,7 +134,11 @@ Update these functions in `servers/github_tools.py`:
 | `upload_media_file()` | Image path structure (default: `docs/images/changelog/YYYY-MM-DD/`) |
 | `add_changelog_frontmatter()` | Frontmatter format and components |
 
-**Key files:** `servers/github_tools.py`, `main.py`, `skills/changelog-formatting/`
+3. **Agent Prompts** (`main.py`)
+   - Customize agent instructions to match your changelog format
+   - Update references to your Slack channel structure
+
+**Key files:** `servers/github_tools.py`, `main.py`, `skills/`
 
 ### Creating Skills
 
