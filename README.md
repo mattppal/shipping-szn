@@ -2,6 +2,8 @@
 
 An AI-powered changelog automation system using Claude Agent SDK with multi-agent orchestration and Claude Skills.
 
+**Important:** This changelog system is designed for Mintlify documentation sites with a custom changelog structure. Customize the code to match your Mintlify changelog structure and navigation configuration.
+
 ## Overview
 
 This system automates the entire changelog creation process:
@@ -24,18 +26,14 @@ The system uses four specialized agents orchestrated by a main coordinator:
 
 ### Claude Skills
 
-Skills provide domain expertise through progressive disclosure - loading content on-demand rather than embedding in prompts:
+Skills provide domain expertise through progressive disclosure, loading content on-demand rather than embedding in prompts:
 
 - **brand-writing** (`skills/brand-writing/`): Replit's brand voice and writing guidelines
 - **changelog-formatting** (`skills/changelog-formatting/`): Template structure and formatting rules
 - **doc-quality** (`skills/doc-quality/`): Documentation quality review criteria
 - **media-insertion** (`skills/media-insertion/`): How to insert images and videos from Slack into markdown
 
-**Benefits:**
-- Reduced context window usage (each skill ~100 tokens metadata vs thousands embedded)
-- On-demand loading (skills only load when triggered)
-- Reusable across agents
-- Easier to maintain and update
+Benefits: Reduced context window usage (~100 tokens metadata vs thousands embedded), on-demand loading, reusable across agents, easier maintenance.
 
 ## Setup
 
@@ -43,7 +41,24 @@ Skills provide domain expertise through progressive disclosure - loading content
 
 - Python 3.13+
 - uv package manager
+- A Mintlify documentation site repository
 - Environment variables configured (see below)
+
+### Mintlify Configuration
+
+Customize the following to match your Mintlify changelog structure:
+
+1. **Navigation Structure** (`docs/docs.json`): Update `update_docs_json_content()` in `servers/github_tools.py` to match your anchor name and grouping logic.
+
+2. **Changelog Path Structure**: Default is `docs/updates/YYYY/MM/DD/changelog.mdx`. Update `create_changelog_pr()` and `parse_changelog_path()` if your structure differs.
+
+3. **Image Path Structure**: Default is `docs/images/changelog/YYYY-MM-DD/filename`. Update `upload_media_file()` if your paths differ.
+
+4. **Frontmatter Format**: Default includes Mintlify components like `<AuthorCard/>`. Update `add_changelog_frontmatter()` to match your requirements.
+
+5. **File Extensions**: Default uses `.mdx`. Update `changelog_remote_path` in `create_changelog_pr()` if you use `.md`.
+
+**Key files:** `servers/github_tools.py`, `main.py`, `skills/changelog-formatting/`
 
 ### Environment Variables
 
@@ -110,12 +125,12 @@ The system integrates with:
 
 ## Workflow
 
-1. Orchestrator receives user prompt to create changelog
-2. Routes to `changelog_writer` → fetches Slack messages
-3. Routes to `template_formatter` → formats content
-4. Routes to `review_and_feedback` → reviews quality
-5. Routes to `pr_writer` → creates GitHub PR
-6. Returns PR URL to user
+1. Orchestrator receives prompt to create changelog
+2. Routes to `changelog_writer` to fetch Slack messages
+3. Routes to `template_formatter` to format content
+4. Routes to `review_and_feedback` to review quality
+5. Routes to `pr_writer` to create GitHub PR
+6. Returns PR URL
 
 ## Development
 
@@ -128,10 +143,7 @@ uv run python main.py
 
 ### Modifying Skills
 
-Skills can be updated without changing code:
-1. Edit files in `skills/*/`
-2. Changes take effect on next run
-3. No code restart required
+Edit files in `skills/*/`. Changes take effect on next run without code restart.
 
 ### Adding Agents
 
@@ -166,7 +178,3 @@ agents={
 │   └── updates/               # Generated changelogs
 └── pyproject.toml             # Python dependencies
 ```
-
-## License
-
-Copyright © Replit

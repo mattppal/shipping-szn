@@ -32,13 +32,7 @@ if not GITHUB_REPO:
 # Initialize GitHub client
 github_client = Github(GITHUB_TOKEN)
 
-# Configuration
 DOCS_JSON_PATH = "docs/docs.json"
-
-
-# ============================================================================
-# UTILITY FUNCTIONS
-# ============================================================================
 
 
 def get_repo():
@@ -58,7 +52,6 @@ def parse_changelog_path(changelog_path: str) -> Optional[Dict[str, str]]:
     Expected format: ./docs/updates/YYYY-MM-DD.md or similar
     Returns dict with year, month, day or None if invalid.
     """
-    # Match patterns like YYYY-MM-DD or YYYY/MM/DD
     match = re.search(r"(\d{4})[-/](\d{2})[-/](\d{2})", changelog_path)
     if match:
         return {
@@ -71,7 +64,7 @@ def parse_changelog_path(changelog_path: str) -> Optional[Dict[str, str]]:
 
 def format_pr_body(date_str: str, changelog_path: str, media_count: int = 0) -> str:
     """Generate the pull request body."""
-    return f"""🤖 This is an auto-generated pull request from the Changelog Bot
+    return f"""This is an auto-generated pull request from the Changelog Bot
 
 ## Summary
 This PR contains an automated changelog for:
@@ -125,7 +118,6 @@ async def create_commit_with_files(
         loop = asyncio.get_event_loop()
 
         def create_commit():
-            # Step 1: Create blobs for all files
             blob_shas = {}
             for file_path, file_content in files.items():
                 try:
@@ -135,30 +127,22 @@ async def create_commit_with_files(
                 except Exception as e:
                     logger.error(f"Error creating blob for {file_path}: {str(e)}")
                     return None
-            logger.debug(f"Created {len(blob_shas)} blobs")
 
-            # Step 2: Get the base tree SHA from parent commit
             parent_commit = repo.get_git_commit(parent_commit_sha)
             base_tree_sha = parent_commit.tree.sha
 
-            # Step 3: Build tree entries with only our new/updated files
-            # GitHub API's base_tree parameter automatically preserves all existing files
             tree_entries = []
             for file_path, blob_sha in blob_shas.items():
                 tree_entries.append(
                     {
                         "path": file_path,
-                        "mode": "100644",  # Regular file mode
+                        "mode": "100644",
                         "type": "blob",
                         "sha": blob_sha,
                     }
                 )
 
-            # Step 4: Create the new tree using base_tree to preserve existing files
-            # PyGithub's create_git_tree doesn't directly support base_tree parameter
-            # So we'll use the _requester to call the API directly
             try:
-                # Use base_tree parameter via _requester to preserve all existing files
                 tree_data = {
                     "base_tree": base_tree_sha,
                     "tree": tree_entries,
@@ -168,9 +152,7 @@ async def create_commit_with_files(
                     "POST", f"{repo.url}/git/trees", input=tree_data, headers=headers
                 )
                 new_tree_sha = tree_result[1]["sha"]
-                logger.debug(f"Created tree with {len(tree_entries)} files")
 
-                # Create a GitTree object from the SHA
                 new_tree = GitTree(
                     repo._requester,
                     repo._headers,
@@ -181,14 +163,12 @@ async def create_commit_with_files(
                 logger.error(f"Error creating tree: {str(e)}")
                 raise
 
-            # Step 5: Create the commit
             try:
                 commit = repo.create_git_commit(
                     message=commit_message,
                     tree=new_tree,
                     parents=[parent_commit],
                 )
-                logger.debug(f"Created commit: {commit.sha}")
                 return commit.sha
             except Exception as e:
                 logger.error(f"Error creating commit: {str(e)}")
@@ -197,12 +177,8 @@ async def create_commit_with_files(
         commit_sha = await loop.run_in_executor(None, create_commit)
 
         if commit_sha:
-            # Step 6: Update the branch reference
             ref = repo.get_git_ref(f"heads/{branch_name}")
             ref.edit(commit_sha)
-            logger.info(
-                f"Committed {len(files)} files to {branch_name} ({commit_sha[:8]})"
-            )
 
         return commit_sha
 
@@ -228,39 +204,24 @@ async def upload_media_file(
         Remote path if successful, None otherwise
     """
     try:
-        # Validate file exists and is a file
-        if not os.path.exists(local_path):
-            logger.error(f"Media file not found: {local_path}")
-            return None
-
-        if not os.path.isfile(local_path):
-            logger.error(f"Path is not a file: {local_path}")
+        if not os.path.exists(local_path) or not os.path.isfile(local_path):
             return None
 
         with open(local_path, "rb") as f:
             file_content = f.read()
 
-        # Determine remote path: images/changelog/YYYY-MM-DD/filename
         filename = os.path.basename(local_path)
         remote_path = f"docs/images/changelog/{date_str}/{filename}"
 
-        # GitHub API calls are synchronous, so we run them in an executor
-        # to avoid blocking the event loop
         loop = asyncio.get_event_loop()
 
-        # Check if file already exists on the branch and upload/update
         def upload_or_update():
             max_retries = 3
             for attempt in range(max_retries):
                 try:
-                    # Try to get existing file to check if it exists
                     existing_file = repo.get_contents(remote_path, ref=branch_name)
-                    # File exists - check if content is the same
-                    existing_content = existing_file.decoded_content
-                    if existing_content == file_content:
-                        logger.debug(f"Media file unchanged: {remote_path}")
+                    if existing_file.decoded_content == file_content:
                         return
-                    # Content differs - update it with fresh SHA
                     repo.update_file(
                         path=remote_path,
                         message=f"Update media file for changelog {date_str}",
@@ -268,11 +229,9 @@ async def upload_media_file(
                         sha=existing_file.sha,
                         branch=branch_name,
                     )
-                    logger.debug(f"Updated existing media: {remote_path}")
                     return
                 except GithubException as e:
                     if e.status == 404:
-                        # File doesn't exist - create it
                         try:
                             repo.create_file(
                                 path=remote_path,
@@ -280,23 +239,15 @@ async def upload_media_file(
                                 content=file_content,
                                 branch=branch_name,
                             )
-                            logger.debug(f"Created new media: {remote_path}")
                             return
                         except GithubException as create_e:
-                            # If create fails with 409, file exists (created concurrently)
-                            # Get the existing file and update it instead
                             if create_e.status == 409:
                                 try:
                                     existing_file = repo.get_contents(
                                         remote_path, ref=branch_name
                                     )
-                                    # Check if content is the same
                                     if existing_file.decoded_content == file_content:
-                                        logger.info(
-                                            f"Media file unchanged (concurrent create), skipping: {remote_path}"
-                                        )
                                         return
-                                    # Update with current SHA
                                     repo.update_file(
                                         path=remote_path,
                                         message=f"Update media file for changelog {date_str}",
@@ -304,44 +255,25 @@ async def upload_media_file(
                                         sha=existing_file.sha,
                                         branch=branch_name,
                                     )
-                                    logger.info(
-                                        f"Updated media (after concurrent create): {remote_path}"
-                                    )
                                     return
                                 except GithubException as update_e:
-                                    # If update also fails with 409, retry
                                     if (
                                         update_e.status == 409
                                         and attempt < max_retries - 1
                                     ):
-                                        logger.warning(
-                                            f"Concurrent file modification, retrying: {remote_path}"
-                                        )
                                         continue
                                     raise
                             raise
                     elif e.status == 409:
-                        # SHA mismatch - file was updated concurrently, retry with fresh SHA
                         if attempt < max_retries - 1:
-                            logger.warning(
-                                f"SHA mismatch (409), retrying with fresh SHA: {remote_path} (attempt {attempt + 1}/{max_retries})"
-                            )
                             continue
-                        else:
-                            logger.error(
-                                f"Failed to update after {max_retries} attempts: {remote_path}"
-                            )
-                            raise
+                        raise
                     else:
-                        # Re-raise other GitHub exceptions
                         raise
 
         await loop.run_in_executor(None, upload_or_update)
-
-        logger.debug(f"Uploaded media: {remote_path}")
         return remote_path
     except Exception as e:
-        logger.error(f"Error uploading media file {local_path}: {str(e)}")
         return None
 
 
@@ -357,21 +289,16 @@ def update_docs_json_content(docs_content: str, year: str, month: str, day: str)
     """
     docs_data = json.loads(docs_content)
 
-    # Create new changelog entry path
     new_entry = f"updates/{year}/{month}/{day}/changelog"
 
-    # Extract all existing changelog entries from the current docs.json
     all_changelogs = []
 
-    # Find the Changelog anchor and extract existing entries
     changelog_anchor = None
     for anchor in docs_data.get("navigation", {}).get("anchors", []):
         if anchor.get("anchor") == "Changelog":
             changelog_anchor = anchor
-            # Parse existing groups and pages
             for group in anchor.get("groups", []):
                 for page_entry in group.get("pages", []):
-                    # Handle both string paths and object with name/page
                     if isinstance(page_entry, str):
                         page_path = page_entry
                     elif isinstance(page_entry, dict):
@@ -379,7 +306,6 @@ def update_docs_json_content(docs_content: str, year: str, month: str, day: str)
                     else:
                         continue
 
-                    # Extract date from path: updates/YYYY/MM/DD/changelog
                     match = re.match(
                         r"updates/(\d{4})/(\d{2})/(\d{2})/changelog", page_path
                     )
@@ -394,7 +320,6 @@ def update_docs_json_content(docs_content: str, year: str, month: str, day: str)
                         )
             break
 
-    # Add the new changelog entry
     all_changelogs.append(
         {
             "year": year,
@@ -404,7 +329,6 @@ def update_docs_json_content(docs_content: str, year: str, month: str, day: str)
         }
     )
 
-    # Remove duplicates (in case the entry already exists)
     unique_changelogs = []
     seen_paths = set()
     for cl in all_changelogs:
@@ -412,7 +336,6 @@ def update_docs_json_content(docs_content: str, year: str, month: str, day: str)
             unique_changelogs.append(cl)
             seen_paths.add(cl["path"])
 
-    # Sort changelogs by date (newest first)
     unique_changelogs.sort(
         key=lambda x: (
             -int(x["year"]),
@@ -421,7 +344,6 @@ def update_docs_json_content(docs_content: str, year: str, month: str, day: str)
         )
     )
 
-    # Group changelogs by month and year (maintaining order)
     from collections import OrderedDict
 
     grouped_changelogs = OrderedDict()
@@ -432,22 +354,15 @@ def update_docs_json_content(docs_content: str, year: str, month: str, day: str)
             grouped_changelogs[group_key] = []
         grouped_changelogs[group_key].append(cl["path"])
 
-    # Update the Changelog anchor with all entries (existing + new)
     if changelog_anchor:
         changelog_anchor["icon"] = "clock-rotate-left"
         changelog_anchor["description"] = "Latest updates and changes"
         changelog_anchor["groups"] = []
 
-        # Add each month group (maintaining sorted order with newest first)
         for group_name, pages in grouped_changelogs.items():
             changelog_anchor["groups"].append({"group": group_name, "pages": pages})
 
     return json.dumps(docs_data, indent=2)
-
-
-# ============================================================================
-# TOOLS
-# ============================================================================
 
 
 @tool(
@@ -488,10 +403,9 @@ async def add_changelog_frontmatter(args: Dict[str, Any]) -> Dict[str, Any]:
                 "is_error": True,
             }
 
-        # Parse and format date
         try:
             date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-            formatted_date = date_obj.strftime("%B %d, %Y")  # e.g., "October 30, 2025"
+            formatted_date = date_obj.strftime("%B %d, %Y")
         except ValueError:
             return {
                 "content": [
@@ -503,7 +417,6 @@ async def add_changelog_frontmatter(args: Dict[str, Any]) -> Dict[str, Any]:
                 "is_error": True,
             }
 
-        # Build frontmatter with single curly braces (not double)
         frontmatter = f"""---
 title: {formatted_date}
 description: 2 min read
@@ -515,14 +428,13 @@ import {{ AuthorCard }} from '/snippets/author-card.mdx';
 
 """
 
-        # Combine frontmatter with content
         formatted_content = frontmatter + content
 
         return {
             "content": [
                 {
                     "type": "text",
-                    "text": f"✅ Added frontmatter for {formatted_date}\n\n"
+                    "text": f"Added frontmatter for {formatted_date}\n\n"
                     f"```markdown\n{formatted_content[:300]}...\n```",
                 },
                 {
@@ -533,10 +445,8 @@ import {{ AuthorCard }} from '/snippets/author-card.mdx';
         }
 
     except Exception as e:
-        error_msg = f"Unexpected error: {str(e)}"
-        logger.error(error_msg, exc_info=True)
         return {
-            "content": [{"type": "text", "text": error_msg}],
+            "content": [{"type": "text", "text": f"Unexpected error: {str(e)}"}],
             "is_error": True,
         }
 
@@ -591,7 +501,6 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
         repo = get_repo()
         default_branch = repo.default_branch
 
-        # Get changelog content
         changelog_path = args.get("changelog_path")
         changelog_content = args.get("changelog_content")
 
@@ -606,7 +515,6 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
                 "is_error": True,
             }
 
-        # Read changelog file if path provided
         if changelog_path and not changelog_content:
             try:
                 with open(changelog_path, "r") as f:
@@ -622,7 +530,6 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
                     "is_error": True,
                 }
 
-        # Parse date from path or use override
         date_override = args.get("date_override")
         if date_override:
             match = re.match(r"(\d{4})-(\d{2})-(\d{2})", date_override)
@@ -655,7 +562,6 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
                     "is_error": True,
                 }
         else:
-            # Use today's date if no path and no override
             today = datetime.now()
             date_info = {
                 "year": today.strftime("%Y"),
@@ -668,18 +574,12 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
         day = date_info["day"]
         date_str = f"{year}-{month}-{day}"
 
-        logger.info(f"Creating changelog PR for {date_str}")
-
-        # Create new branch
         branch_name = create_branch_name()
         ref = repo.get_git_ref(f"heads/{default_branch}")
         repo.create_git_ref(f"refs/heads/{branch_name}", ref.object.sha)
-        logger.debug(f"Created branch: {branch_name}")
 
-        # Collect all files to commit atomically
         files_to_commit: Dict[str, bytes] = {}
 
-        # Extract media file references from changelog FIRST
         referenced_filenames = set()
         if changelog_content:
             date_pattern = date_str.replace("-", r"\-")
@@ -689,15 +589,9 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
                     changelog_content,
                 )
             )
-            if referenced_filenames:
-                logger.debug(
-                    f"Found {len(referenced_filenames)} media file references in changelog"
-                )
 
-        # 1. Collect media files - auto-discover if not provided
         media_files = args.get("media_files", [])
 
-        # Validate media_files is a list
         if media_files and not isinstance(media_files, list):
             return {
                 "content": [
@@ -709,9 +603,7 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
                 "is_error": True,
             }
 
-        # Auto-discover media files if not provided or empty
         if not media_files:
-            # First, try today's date directory
             media_dir = f"./docs/updates/media/{date_str}"
             discovered_files = []
             if os.path.exists(media_dir) and os.path.isdir(media_dir):
@@ -720,16 +612,11 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
                     if os.path.isfile(file_path):
                         discovered_files.append(file_path)
 
-            # If we have referenced files, search ALL date directories for missing ones
             if referenced_filenames:
                 found_filenames = {os.path.basename(f) for f in discovered_files}
                 missing_refs = referenced_filenames - found_filenames
 
                 if missing_refs:
-                    logger.debug(
-                        f"Searching other date directories for {len(missing_refs)} missing files"
-                    )
-                    # Search all date directories in media folder
                     media_base = "./docs/updates/media"
                     if os.path.exists(media_base):
                         for date_dir in os.listdir(media_base):
@@ -742,22 +629,14 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
                                         )
                                         if os.path.isfile(file_path):
                                             discovered_files.append(file_path)
-                                            logger.debug(
-                                                f"Found missing file in {date_dir}: {filename}"
-                                            )
 
             if discovered_files:
-                logger.debug(f"Auto-discovered {len(discovered_files)} media files")
                 media_files = discovered_files
 
-        # Track which referenced files we've found
         found_referenced_files = set()
 
         media_count = 0
         if media_files:
-            logger.debug(f"Processing {len(media_files)} media files")
-
-            # Read all media files into memory
             for local_path in media_files:
                 try:
                     with open(local_path, "rb") as f:
@@ -768,10 +647,9 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
                     media_count += 1
                     if filename in referenced_filenames:
                         found_referenced_files.add(filename)
-                except Exception as e:
-                    logger.error(f"Error reading media file {local_path}: {str(e)}")
+                except Exception:
+                    pass
 
-        # Validate: Fail if changelog references files that don't exist locally
         if referenced_filenames:
             missing_files = referenced_filenames - found_referenced_files
             if missing_files:
@@ -794,7 +672,6 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
                     "is_error": True,
                 }
 
-        # 2. Add changelog file
         if not changelog_content:
             return {
                 "content": [
@@ -808,21 +685,15 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
         changelog_remote_path = f"docs/updates/{year}/{month}/{day}/changelog.mdx"
         files_to_commit[changelog_remote_path] = changelog_content.encode("utf-8")
 
-        # 3. Update docs.json
         try:
-            # Get current docs.json from the base branch (before our branch changes)
             docs_file = repo.get_contents(DOCS_JSON_PATH, ref=default_branch)
             current_docs = docs_file.decoded_content.decode()
             updated_docs = update_docs_json_content(current_docs, year, month, day)
             if updated_docs:
                 files_to_commit[DOCS_JSON_PATH] = updated_docs.encode("utf-8")
-            else:
-                logger.warning("update_docs_json_content returned None, skipping")
-        except Exception as e:
-            logger.error(f"Error preparing docs.json update: {str(e)}")
-            # Continue without docs.json if it fails
+        except Exception:
+            pass
 
-        # Commit all files atomically in a single commit
         if files_to_commit:
             parent_commit_sha = ref.object.sha
             commit_message = f"Add changelog for {date_str}"
@@ -836,12 +707,11 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
             )
 
             if not commit_sha:
-                # Get the actual error from the exception
                 return {
                     "content": [
                         {
                             "type": "text",
-                            "text": "Error: Failed to create commit with files. Check logs for details.",
+                            "text": "Error: Failed to create commit with files.",
                         }
                     ],
                     "is_error": True,
@@ -849,7 +719,6 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
 
             uploaded_files = list(files_to_commit.keys())
 
-        # 4. Create pull request
         pr_title = args.get("pr_title") or f"[BOT] Changelog: {date_str}"
         pr_body = format_pr_body(date_str, changelog_remote_path, media_count)
         is_draft = args.get("draft", True)
@@ -862,26 +731,23 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
             draft=is_draft,
         )
 
-        # Add labels
         try:
             pr.add_to_labels("bot", "automated-pr", "needs-review", "changelog")
-        except Exception as e:
-            logger.warning(f"Could not add labels: {str(e)}")
+        except Exception:
+            pass
 
-        # Format success message
-        summary = f"✅ Successfully created changelog PR!\n\n"
-        summary += f"📅 Date: {date_str}\n"
-        summary += f"🌿 Branch: {branch_name}\n"
-        summary += f"🔗 PR URL: {pr.html_url}\n"
-        summary += f"📝 PR #{pr.number}: {pr_title}\n\n"
-        summary += f"📁 Files uploaded ({len(uploaded_files)}):\n"
+        uploaded_files = list(files_to_commit.keys())
+        summary = f"Successfully created changelog PR\n\n"
+        summary += f"Date: {date_str}\n"
+        summary += f"Branch: {branch_name}\n"
+        summary += f"PR URL: {pr.html_url}\n"
+        summary += f"PR #{pr.number}: {pr_title}\n\n"
+        summary += f"Files uploaded ({len(uploaded_files)}):\n"
         for file_path in uploaded_files:
-            summary += f"   • {file_path}\n"
+            summary += f"   {file_path}\n"
         if media_count > 0:
-            summary += f"\n📎 Media files: {media_count}\n"
-        summary += (
-            f"\n{'📄 Draft PR' if is_draft else '✅ Published PR'} - Ready for review!"
-        )
+            summary += f"\nMedia files: {media_count}\n"
+        summary += f"\n{'Draft PR' if is_draft else 'Published PR'} - Ready for review"
 
         return {
             "content": [
@@ -893,16 +759,12 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     except GithubException as e:
-        error_msg = f"GitHub API Error: {str(e)}"
-        logger.error(error_msg)
         return {
-            "content": [{"type": "text", "text": error_msg}],
+            "content": [{"type": "text", "text": f"GitHub API Error: {str(e)}"}],
             "is_error": True,
         }
     except Exception as e:
-        error_msg = f"Unexpected error: {str(e)}"
-        logger.error(error_msg, exc_info=True)
         return {
-            "content": [{"type": "text", "text": error_msg}],
+            "content": [{"type": "text", "text": f"Unexpected error: {str(e)}"}],
             "is_error": True,
         }

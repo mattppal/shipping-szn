@@ -26,15 +26,11 @@ def display_message(msg):
                 print(f"Claude: {block.text}")
             elif isinstance(block, ToolUseBlock):
                 print(f"Using tool: {block.name}")
-                # Show tool inputs for calculator
                 if block.input:
                     print(f"  Input: {block.input}")
     elif isinstance(msg, SystemMessage):
-        # Ignore system messages
         pass
     elif isinstance(msg, ResultMessage):
         print("Result ended")
         if msg.total_cost_usd:
             print(f"Cost: ${msg.total_cost_usd:.6f}")
-    # else:
-    #     print(msg)
