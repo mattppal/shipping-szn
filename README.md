@@ -1,204 +1,144 @@
 # Changelog Automation
 
-An AI-powered changelog automation system using Claude Agent SDK with multi-agent orchestration and Claude Skills.
+AI-powered changelog automation using Claude Agent SDK. Automates fetching Slack updates, writing changelog content, formatting, review, and GitHub PR creation.
 
-**Important:** This changelog system is designed for Mintlify documentation sites with a custom changelog structure. Customize the code to match your Mintlify changelog structure and navigation configuration.
+**Important:** Designed for Mintlify documentation sites. Customize paths and structure in `servers/github_tools.py` and `main.py`.
 
-## Overview
+## Table of Contents
 
-This system automates the entire changelog creation process:
-1. **Fetch** updates from Slack
-2. **Write** changelog content following brand guidelines
-3. **Format** according to documentation templates
-4. **Review** for quality and accuracy
-5. **Publish** by creating a GitHub pull request
+- [Quick Start](#quick-start)
+- [Setup](#setup)
+- [Architecture](#architecture)
+- [Customization](#customization)
+- [Development](#development)
+- [Reference](#reference)
 
-## Architecture
+## Quick Start
 
-### Multi-Agent System
+1. **Install dependencies:**
+   ```bash
+   uv sync
+   ```
 
-The system uses four specialized agents orchestrated by a main coordinator:
+2. **Set environment variables:**
+   ```bash
+   GITHUB_TOKEN=your_token
+   GITHUB_REPO=your-org/repo-name
+   SLACK_TOKEN=your_token
+   SLACK_CHANNEL_ID=channel_id
+   ORCHESTRATOR_MODEL=sonnet
+   ```
 
-- **changelog_writer**: Fetches Slack updates and drafts changelog content
-- **template_formatter**: Reformats content to match template structure
-- **review_and_feedback**: Reviews for quality, tone, and accuracy
-- **pr_writer**: Creates GitHub PRs with formatted content
-
-### Claude Skills
-
-Skills provide domain expertise through progressive disclosure, loading content on-demand rather than embedding in prompts:
-
-- **brand-writing** (`skills/brand-writing/`): Replit's brand voice and writing guidelines
-- **changelog-formatting** (`skills/changelog-formatting/`): Template structure and formatting rules
-- **doc-quality** (`skills/doc-quality/`): Documentation quality review criteria
-- **media-insertion** (`skills/media-insertion/`): How to insert images and videos from Slack into markdown
-
-Benefits: Reduced context window usage (~100 tokens metadata vs thousands embedded), on-demand loading, reusable across agents, easier maintenance.
+3. **Run:**
+   ```bash
+   uv run python main.py
+   ```
 
 ## Setup
 
 ### Prerequisites
 
 - Python 3.13+
-- uv package manager
-- A Mintlify documentation site repository
-- Environment variables configured (see below)
-
-### Mintlify Configuration
-
-Customize the following to match your Mintlify changelog structure:
-
-1. **Navigation Structure** (`docs/docs.json`): Update `update_docs_json_content()` in `servers/github_tools.py` to match your anchor name and grouping logic.
-
-2. **Changelog Path Structure**: Default is `docs/updates/YYYY/MM/DD/changelog.mdx`. Update `create_changelog_pr()` and `parse_changelog_path()` if your structure differs.
-
-3. **Image Path Structure**: Default is `docs/images/changelog/YYYY-MM-DD/filename`. Update `upload_media_file()` if your paths differ.
-
-4. **Frontmatter Format**: Default includes Mintlify components like `<AuthorCard/>`. Update `add_changelog_frontmatter()` to match your requirements.
-
-5. **File Extensions**: Default uses `.mdx`. Update `changelog_remote_path` in `create_changelog_pr()` if you use `.md`.
-
-**Key files:** `servers/github_tools.py`, `main.py`, `skills/changelog-formatting/`
+- `uv` package manager
+- Mintlify documentation site repository
+- GitHub personal access token
+- Slack bot token
 
 ### Environment Variables
 
-Required secrets:
-```bash
-GITHUB_TOKEN=          # GitHub personal access token
-GITHUB_REPO=           # Repository name (e.g., "replit/docs")
-SLACK_TOKEN=           # Slack bot token
-SLACK_CHANNEL_ID=      # Slack channel ID to monitor
-ORCHESTRATOR_MODEL=    # Claude model for orchestrator (e.g., "sonnet")
-```
+Set these required variables:
+
+| Variable | Description |
+|---------|-------------|
+| `GITHUB_TOKEN` | GitHub personal access token |
+| `GITHUB_REPO` | Repository name (e.g., "replit/docs") |
+| `SLACK_TOKEN` | Slack bot token |
+| `SLACK_CHANNEL_ID` | Slack channel ID to monitor |
+| `ORCHESTRATOR_MODEL` | Claude model (e.g., "sonnet") |
 
 ### Installation
 
 ```bash
-# Install dependencies
 uv sync
-
-# Run the changelog automation
 uv run python main.py
 ```
 
-## Replit Deployment
+## Architecture
 
-This project includes configuration files for running and deploying on Replit.
+### Multi-Agent System
 
-### `.replit` File
+Four specialized agents handle different tasks:
 
-The `.replit` file is Replit's project configuration file that defines how your project runs and deploys. This project's configuration includes:
+| Agent | Purpose |
+|-------|---------|
+| `changelog_writer` | Fetches Slack updates and drafts content |
+| `template_formatter` | Formats content to match template structure |
+| `review_and_feedback` | Reviews for quality, tone, and accuracy |
+| `pr_writer` | Creates GitHub PRs with formatted content |
 
-- **Modules**: Specifies runtime modules (`nodejs-20`, `python-base-3.13`)
-- **Agent Settings**: Enables expert mode for Replit's AI assistant
-- **Workflows**: Defines custom run workflows that execute `uv run python main.py`
-- **Deployment**: Configures scheduled deployment target
+**Learn more:** [Claude Agent SDK Multi-Agent Orchestration](https://docs.anthropic.com/claude/docs/claude-agent-sdk#multi-agent-systems)
 
-The workflow configuration allows you to run the changelog automation directly from Replit's run button, which executes the Python script using `uv`.
+### Claude Skills
 
-### `replit.md` File
+Skills provide domain expertise loaded on-demand:
 
-The `replit.md` file is automatically generated by Replit's Agent AI assistant and serves as a guide for understanding your project. It includes:
+- **brand-writing**: Brand voice and writing guidelines
+- **changelog-formatting**: Template structure and formatting rules
+- **doc-quality**: Documentation quality review criteria
+- **media-insertion**: How to insert images and videos from Slack
 
-- **Project Overview**: Description of the changelog automation system
-- **System Architecture**: Details about multi-agent orchestration, Claude Skills, and MCP server integration
-- **Coding Patterns**: Project structure and development practices
-- **User Preferences**: Communication style and development preferences
+Skills reduce context window usage (~100 tokens metadata vs thousands embedded).
 
-You can customize `replit.md` to help Replit's Agent better understand your project's structure, coding standards, and preferences. The Agent uses this file to provide more accurate assistance when working with your codebase.
+**Learn more:** [Claude Agent SDK Skills Documentation](https://docs.anthropic.com/claude/docs/claude-skills)
 
-### Deploying on Replit
+### MCP Servers
 
-To deploy this project on Replit:
+Integrates with Model Context Protocol (MCP) servers:
 
-1. **Remix the Template**: [Remix this template on Replit](https://replit.com/@matt/shipping-szn?utm_source=Matt&utm_medium=github&utm_campaign=shipping-szn) to create your own copy with all dependencies and configuration pre-configured.
-
-2. **Configure Environment Variables**: Set up the required environment variables (see [Environment Variables](#environment-variables)) in Replit's Secrets tab:
-   - `GITHUB_TOKEN`
-   - `GITHUB_REPO`
-   - `SLACK_TOKEN`
-   - `SLACK_CHANNEL_ID`
-   - `ORCHESTRATOR_MODEL`
-
-3. **Run Locally**: Use the run button in Replit to execute the changelog automation workflow defined in `.replit`.
-
-4. **Deploy (Optional)**: For scheduled or continuous deployment:
-   - Navigate to the Deployments tool in Replit
-   - Choose a deployment type:
-     - **Scheduled Deployments**: For running the automation on a schedule (configured in `.replit` with `deploymentTarget = "scheduled"`)
-     - **Reserved VM Deployments**: For dedicated resources with consistent uptime
-     - **Autoscale Deployments**: For variable workloads that need automatic scaling
-   - Configure deployment settings and deploy
-
-**Note**: This project is designed to run as a scheduled automation rather than a continuously running service. The scheduled deployment option is most appropriate for periodic changelog generation.
-
-## Skills
-
-Skills are stored in `skills/` and automatically discovered by Claude Agent SDK.
-
-### Skill Structure
-
-Each skill directory contains:
-- `SKILL.md` - Main instructions with YAML frontmatter
-- Reference files - Supporting documentation (loaded as needed)
-
-Example:
-```
-skills/brand-writing/
-├── SKILL.md                 # Quick reference (always loaded)
-└── BRAND_GUIDELINES.md      # Full guidelines (loaded on-demand)
-```
-
-### Creating New Skills
-
-1. Create skill directory: `skills/your-skill-name/`
-2. Add `SKILL.md` with frontmatter:
-   ```yaml
-   ---
-   name: your-skill-name
-   description: When to use this skill and what it does
-   ---
-   
-   # Your Skill Name
-   
-   Quick reference content here...
-   ```
-3. Add reference files as needed
-4. Skills are automatically discovered by the SDK
-
-## MCP Servers
-
-The system integrates with:
 - **GitHub MCP**: Pull request and repository management
 - **Slack MCP**: Message fetching and threading
 - **Mintlify MCP**: Documentation search
 - **Replit MCP**: Replit documentation search
 
-## Workflow
+Custom MCP servers (`slack_updates`, `github_changelog`) use `create_sdk_mcp_server()`.
 
-1. Orchestrator receives prompt to create changelog
-2. Routes to `changelog_writer` to fetch Slack messages
-3. Routes to `template_formatter` to format content
-4. Routes to `review_and_feedback` to review quality
-5. Routes to `pr_writer` to create GitHub PR
-6. Returns PR URL
+**Learn more:** [MCP Documentation](https://modelcontextprotocol.io/) | [Claude Agent SDK MCP Integration](https://docs.anthropic.com/claude/docs/mcp-integration)
 
-## Development
+## Customization
 
-### Running Locally
+### Mintlify Configuration
 
-```bash
-# Start the automation
-uv run python main.py
-```
+Update these functions in `servers/github_tools.py`:
 
-### Modifying Skills
+| Function | What to Change |
+|----------|----------------|
+| `update_docs_json_content()` | Navigation anchor name and grouping logic |
+| `create_changelog_pr()` | Changelog path structure (default: `docs/updates/YYYY/MM/DD/changelog.mdx`) |
+| `parse_changelog_path()` | Path parsing if structure differs |
+| `upload_media_file()` | Image path structure (default: `docs/images/changelog/YYYY-MM-DD/`) |
+| `add_changelog_frontmatter()` | Frontmatter format and components |
 
-Edit files in `skills/*/`. Changes take effect on next run without code restart.
+**Key files:** `servers/github_tools.py`, `main.py`, `skills/changelog-formatting/`
+
+### Creating Skills
+
+1. Create directory: `skills/your-skill-name/`
+2. Add `SKILL.md` with YAML frontmatter:
+   ```yaml
+   ---
+   name: your-skill-name
+   description: When to use this skill
+   ---
+   ```
+3. Add reference files as needed
+4. Skills auto-discover on next run
+
+**Learn more:** [Creating Custom Skills](https://docs.anthropic.com/claude/docs/claude-skills#creating-skills)
 
 ### Adding Agents
 
-Add new agents in `main.py`:
+Add agents in `main.py`:
+
 ```python
 agents={
     "agent_name": AgentDefinition(
@@ -210,15 +150,29 @@ agents={
 }
 ```
 
-## Project Structure
+**Learn more:** [Claude Agent SDK Documentation](https://docs.anthropic.com/claude/docs/claude-agent-sdk)
+
+## Development
+
+### Running Locally
+
+```bash
+uv run python main.py
+```
+
+### Modifying Skills
+
+Edit files in `skills/*/`. Changes take effect on next run without restart.
+
+### Project Structure
 
 ```
 .
 ├── main.py                    # Main orchestrator
 ├── servers/
 │   ├── config.py              # MCP server configuration
-│   ├── github_tools.py        # GitHub integration
-│   └── slack_tools.py         # Slack integration
+│   ├── github_tools.py        # GitHub integration (custom MCP tools)
+│   └── slack_tools.py         # Slack integration (custom MCP tools)
 ├── skills/                    # Claude Skills (auto-discovered)
 │   ├── brand-writing/
 │   ├── changelog-formatting/
@@ -229,3 +183,22 @@ agents={
 │   └── updates/               # Generated changelogs
 └── pyproject.toml             # Python dependencies
 ```
+
+## Reference
+
+### Workflow
+
+1. Orchestrator receives prompt to create changelog
+2. Routes to `changelog_writer` to fetch Slack messages
+3. Routes to `template_formatter` to format content
+4. Routes to `review_and_feedback` to review quality
+5. Routes to `pr_writer` to create GitHub PR
+6. Returns PR URL
+
+### MCP Server Links
+
+- [MCP Documentation](https://modelcontextprotocol.io/)
+- [Claude Agent SDK MCP Integration](https://docs.anthropic.com/claude/docs/mcp-integration)
+- [Creating Custom MCP Servers](https://docs.anthropic.com/claude/docs/mcp-integration#custom-mcp-servers)
+- [GitHub MCP Server](https://github.com/modelcontextprotocol/servers/tree/main/src/github)
+- [Slack MCP Server](https://github.com/modelcontextprotocol/servers/tree/main/src/slack)
