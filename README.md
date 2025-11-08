@@ -166,7 +166,3 @@ agents={
 │   └── updates/               # Generated changelogs
 └── pyproject.toml             # Python dependencies
 ```
-
-## License
-
-Copyright © Replit
