@@ -1,3 +1,5 @@
+Source: https://cookbook.openai.com/articles/what_makes_documentation_good
+
 # What makes documentation good
 
 Documentation puts useful information inside other people’s heads. Follow these tips to write better documentation.
