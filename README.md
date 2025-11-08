@@ -201,4 +201,3 @@ Edit files in `skills/*/`. Changes take effect on next run without restart.
 - [Claude Agent SDK MCP Integration](https://docs.anthropic.com/claude/docs/mcp-integration)
 - [Creating Custom MCP Servers](https://docs.anthropic.com/claude/docs/mcp-integration#custom-mcp-servers)
 - [GitHub MCP Server](https://github.com/modelcontextprotocol/servers/tree/main/src/github)
-- [Slack MCP Server](https://github.com/modelcontextprotocol/servers/tree/main/src/slack)
