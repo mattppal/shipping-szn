@@ -188,7 +188,7 @@ async def main():
             ),
         },
         system_prompt="You are an expert developer relations professional.",
-        permission_mode="bypassPermissions",
+        permission_mode="default",
         model=ORCHESTRATOR_MODEL,
         cwd="./",
         setting_sources=None,
