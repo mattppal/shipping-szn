@@ -1,12 +1,10 @@
 import os
 from dotenv import load_dotenv
 from claude_agent_sdk.types import McpHttpServerConfig
-from claude_agent_sdk import create_sdk_mcp_server
-from servers.slack_tools import fetch_messages_from_channel
-from servers.github_tools import create_changelog_pr, add_changelog_frontmatter
 
 load_dotenv()
 
+# External MCP servers for third-party integrations
 MCP_SERVERS = {
     "github": McpHttpServerConfig(
         type="http",
@@ -24,11 +22,8 @@ MCP_SERVERS = {
         type="http",
         url="https://docs.replit.com/mcp",
     ),
-    "slack_updates": create_sdk_mcp_server(
-        name="slack_updates", tools=[fetch_messages_from_channel]
-    ),
-    "github_changelog": create_sdk_mcp_server(
-        name="github_changelog",
-        tools=[create_changelog_pr, add_changelog_frontmatter],
-    ),
 }
+
+# Native tools are now imported directly in main.py from:
+# - servers.slack_tools: fetch_messages_from_channel
+# - servers.github_tools: create_changelog_pr, add_changelog_frontmatter
