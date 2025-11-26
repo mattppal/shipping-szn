@@ -136,7 +136,18 @@ Assume subagents have all relevant information required to begin work.
 """
 
 
+def cleanup_existing_changelog() -> None:
+    """Remove today's changelog file if it exists to ensure a clean run."""
+    today_file = get_today_changelog_file()
+    if os.path.exists(today_file):
+        os.remove(today_file)
+        print(f"Removed existing changelog: {today_file}")
+
+
 async def main():
+    # Clean up any existing changelog for today before starting
+    cleanup_existing_changelog()
+
     options = ClaudeAgentOptions(
         agents={
             "changelog_writer": AgentDefinition(
