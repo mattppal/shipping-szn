@@ -6,13 +6,21 @@ from claude_agent_sdk import (
     ClaudeAgentOptions,
     AgentDefinition,
     ClaudeSDKClient,
+    create_sdk_mcp_server,
 )
 
 from servers.config import MCP_SERVERS
-from servers.native_tools import NATIVE_TOOLS_SERVER
+from servers.slack_tools import fetch_messages_from_channel
 from util.messages import display_message
 
 load_dotenv()
+
+# Create SDK MCP server for native tools
+NATIVE_TOOLS_SERVER = create_sdk_mcp_server(
+    name="native_tools",
+    version="1.0.0",
+    tools=[fetch_messages_from_channel],
+)
 
 DEFAULT_DAYS_BACK = 14
 CHANGELOG_FILE_PATTERN = "./docs/updates/{date}.md"
@@ -34,13 +42,10 @@ permissions = {
     "web_search": "WebSearch",
     "search_mintlify": "mcp__mintlify__SearchMintlify",
     "search_replit": "mcp__replit__SearchReplit",
-    # github tools (native - via SDK MCP server)
-    "create_changelog_pr": "mcp__native_tools__create_changelog_pr",
-    "add_changelog_frontmatter": "mcp__native_tools__add_changelog_frontmatter",
+    # github tools (via GitHub MCP server)
     "update_pull_request": "mcp__github__update_pull_request",
     # slack tools (native - via SDK MCP server)
     "fetch_messages_from_channel": "mcp__native_tools__fetch_messages_from_channel",
-    "mark_messages_processed": "mcp__native_tools__mark_messages_processed",
 }
 
 
@@ -70,12 +75,9 @@ permission_groups = {
         permissions["edit_docs"],
         permissions["search_replit"],
     ],
-    "template_formatter": get_today_changelog_permissions()
-    + [permissions["add_changelog_frontmatter"]],
+    "template_formatter": get_today_changelog_permissions(),
     "pr_writer": [
-        permissions["create_changelog_pr"],
         permissions["update_pull_request"],
-        permissions["mark_messages_processed"],
         permissions["search_mintlify"],
         permissions["web_search"],
         permissions["read_docs"],

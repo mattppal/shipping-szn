@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from slugify import slugify
 
 import requests
+from claude_agent_sdk import tool
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
@@ -26,14 +27,7 @@ MAX_FILE_SIZE = 100 * 1024 * 1024
 MEDIA_BASE_DIR = "./docs/updates/media"
 MAX_CONCURRENT_DOWNLOADS = 5
 MAX_TEXT_PREVIEW_LENGTH = 300
-DEFAULT_DAYS_BACK = 14
-PROCESSED_EMOJI = "summarizer_ship"  # Custom emoji to mark processed messages
-
-
-def message_has_processed_reaction(msg: Dict) -> bool:
-    """Check if a message has the processed emoji reaction."""
-    reactions = msg.get("reactions", [])
-    return any(r.get("name") == PROCESSED_EMOJI for r in reactions)
+DEFAULT_DAYS_BACK = 7
 
 
 def sanitize_filename(filename: str) -> str:
@@ -204,9 +198,15 @@ def process_message_files(
     return processed_files
 
 
-async def fetch_messages_from_channel(
-    channel_id: str, days_back: int = DEFAULT_DAYS_BACK
-) -> dict[str, Any]:
+@tool(
+    name="fetch_messages_from_channel",
+    description="Fetch messages from a Slack channel within a specified time range. Downloads all media files (images, videos) to ./docs/updates/media/YYYY-MM-DD/. Processes main messages and thread replies. Can skip downloading media files that already exist locally.",
+    input_schema={
+        "channel_id": str,
+        "days_back": int,
+    },
+)
+async def fetch_messages_from_channel(args: dict[str, Any]) -> dict[str, Any]:
     """Fetch messages from a Slack channel with all media and threads.
 
     Args:
@@ -217,6 +217,15 @@ async def fetch_messages_from_channel(
     skip_existing = True
 
     try:
+        channel_id = args.get("channel_id")
+        days_back = int(args.get("days_back", DEFAULT_DAYS_BACK))
+
+        if not channel_id:
+            return {
+                "content": [{"type": "text", "text": "Error: channel_id is required"}],
+                "is_error": True,
+            }
+
         end_time = datetime.now()
         start_time = end_time - timedelta(days=days_back)
 
@@ -228,13 +237,7 @@ async def fetch_messages_from_channel(
             latest=str(end_time.timestamp()),
         )
 
-        already_processed_count = 0
         for msg in result["messages"]:
-            # Skip messages that have already been processed (have the :summarizer_ship: reaction)
-            if message_has_processed_reaction(msg):
-                already_processed_count += 1
-                continue
-
             try:
                 permalink_result = slack_client.chat_getPermalink(
                     channel=channel_id, message_ts=msg["ts"]
@@ -260,11 +263,8 @@ async def fetch_messages_from_channel(
             except SlackApiError:
                 continue
 
-        summary = f"Fetched {len(messages)} new messages from channel {channel_id}\n"
-        summary += f"Time range: {start_time.strftime('%Y-%m-%d')} to {end_time.strftime('%Y-%m-%d')}\n"
-        if already_processed_count > 0:
-            summary += f"Skipped {already_processed_count} already-processed messages (had :summarizer_ship: reaction)\n"
-        summary += "\n"
+        summary = f"Fetched {len(messages)} messages from channel {channel_id}\n"
+        summary += f"Time range: {start_time.strftime('%Y-%m-%d')} to {end_time.strftime('%Y-%m-%d')}\n\n"
 
         total_files = 0
         skipped_files = 0
@@ -350,47 +350,3 @@ async def fetch_messages_from_channel(
             "content": [{"type": "text", "text": f"Unexpected error: {str(e)}"}],
             "is_error": True,
         }
-
-
-async def mark_messages_processed(
-    channel_id: str,
-    message_timestamps: list[str],
-) -> dict[str, Any]:
-    """Add processed emoji reaction to messages after successful PR creation.
-
-    Args:
-        channel_id: The Slack channel ID
-        message_timestamps: List of message 'ts' values to mark as processed
-
-    Returns:
-        A dictionary with success/failure status for each message.
-    """
-    results = {"marked": [], "already_marked": [], "failed": []}
-
-    for ts in message_timestamps:
-        try:
-            slack_client.reactions_add(
-                channel=channel_id,
-                name=PROCESSED_EMOJI,
-                timestamp=ts,
-            )
-            results["marked"].append(ts)
-        except SlackApiError as e:
-            # Handle "already_reacted" gracefully - this is not an error
-            if e.response.get("error") == "already_reacted":
-                results["already_marked"].append(ts)
-            else:
-                results["failed"].append({"ts": ts, "error": str(e)})
-
-    summary = f"Marked {len(results['marked'])} messages as processed with :summarizer_ship:\n"
-    if results["already_marked"]:
-        summary += f"Already marked: {len(results['already_marked'])}\n"
-    if results["failed"]:
-        summary += f"Failed: {len(results['failed'])}\n"
-        for fail in results["failed"]:
-            summary += f"  - {fail['ts']}: {fail['error']}\n"
-
-    return {
-        "content": [{"type": "text", "text": summary}],
-        "is_error": len(results["failed"]) > 0 and len(results["marked"]) == 0,
-    }
