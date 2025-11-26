@@ -108,14 +108,32 @@ Four specialized agents handle different tasks:
 
 ### Claude Skills
 
-Skills provide domain expertise loaded on-demand:
+Skills provide domain expertise loaded on-demand. They differ from agent prompts in a key way:
 
-- **brand-writing**: Brand voice and writing guidelines (customize for your organization)
-- **changelog-formatting**: Template structure and formatting rules
-- **doc-quality**: Documentation quality review criteria
-- **media-insertion**: How to insert images and videos from Slack
+| Use Skills For | Use Prompts For |
+|----------------|-----------------|
+| Procedural "how-to" knowledge | Dynamic configuration (dates, IDs) |
+| Reusable across conversations | Session-specific role assignment |
+| Static domain expertise | Environment-specific values |
+| Auto-discovered by description | Orchestration logic |
 
-**Note:** The included skills contain example guidelines. You should replace these with your own organization's brand voice, style guides, and documentation standards.
+**Current skills:**
+
+| Skill | Purpose | Why It's a Skill |
+|-------|---------|------------------|
+| `brand-writing` | Voice and style guidelines | Static expertise, reused across agents |
+| `changelog-formatting` | Template structure and media formatting | Procedural knowledge for consistent output |
+| `doc-quality` | Documentation review criteria | Reusable review checklist |
+| `media-insertion` | Inserting Slack media into markdown | Step-by-step procedure |
+
+**What stays in prompts (not skills):**
+- Time windows and dates (dynamic)
+- Slack channel IDs (environment config)
+- Repository names (environment config)
+- Tool permission lists (session constraints)
+- Orchestrator workflow (specific to this automation)
+
+**Design principle:** Extract procedural "how-to" knowledge into skills. Keep dynamic config and role assignment in prompts. Skills auto-discover by description matching—prompts should be lean.
 
 Skills reduce context window usage (~100 tokens metadata vs thousands embedded).
 
