@@ -77,8 +77,7 @@ def get_today_changelog_permissions() -> list[str]:
 
 permission_groups = {
     "review_and_feedback": [
-        permissions["read_docs"],
-        permissions["edit_docs"],
+        *get_today_changelog_permissions(),  # Only today's changelog file
         permissions["web_search"],
         permissions["search_mintlify"],
         permissions["search_replit"],
