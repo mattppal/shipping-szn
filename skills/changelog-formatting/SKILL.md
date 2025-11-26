@@ -11,9 +11,10 @@ This skill helps you format changelog content according to Replit's template str
 
 Convert raw changelog content into properly structured documentation following:
 1. Correct frontmatter with date and metadata
-2. Proper section organization (Platform updates vs Teams and Enterprise)
+2. Proper section organization ("What's new" TOC, then "Platform" and "Teams and Enterprise" sections)
 3. Correct media path formatting and Frame wrappers
 4. Consistent formatting and style
+5. **No Slack links** in final output (remove all Slack announcement links)
 
 ## Quick Start
 
@@ -33,20 +34,50 @@ import { AuthorCard } from '/snippets/author-card.mdx';
 <AuthorCard/>
 ```
 
-### 2. Categorize Updates
+### 2. Create "What's new" TOC
 
-Organize content into two main sections:
+Immediately after `<AuthorCard/>`, add a "## What's new" section with anchor-linked bullet points for ALL updates (both Platform and Teams/Enterprise):
 
-- **Platform updates**: General features, tools, improvements
-- **Teams and Enterprise**: SSO, SAML, SCIM, Identity, Access Management, Viewer Seats, Groups, Permissions
+```markdown
+## What's new
 
-### 3. Structure Content
+* [Feature One](#feature-one)
+* [Feature Two](#feature-two)
+* [Enterprise Feature](#enterprise-feature)
+```
 
-Each section should have:
-- Bullet summaries at top: `* [Update Name]`
-- Detailed sections below: `### [Update Name]` with full content
+**Anchor format**: Convert feature name to lowercase, replace spaces with hyphens.
 
-### 4. Format Media (CRITICAL)
+### 3. Categorize Updates into Sections
+
+After the TOC, organize content into two main sections:
+
+- **## Platform**: General features, tools, improvements
+- **## Teams and Enterprise**: SSO, SAML, SCIM, Identity, Access Management, Viewer Seats, Groups, Permissions
+
+### 4. Structure Content
+
+Each section should have `###` subsections for each feature:
+
+```markdown
+## Platform
+
+### Feature One
+
+Description of the feature.
+
+### Feature Two
+
+Description of the feature.
+
+## Teams and Enterprise
+
+### Enterprise Feature
+
+Description of the feature.
+```
+
+### 5. Format Media (CRITICAL)
 
 **Process for each media reference:**
 
@@ -84,11 +115,24 @@ Each section should have:
 - ❌ `/media/2025-01-15/file.png` (missing "images/changelog" - wrong)
 - ✅ `/images/changelog/2025-01-15/file.png` (correct CDN path)
 
+### 6. Remove Slack Links
+
+**CRITICAL**: Remove all Slack announcement links from the final output. These are for internal tracking only and should not appear in the published changelog.
+
+Remove lines like:
+```markdown
+[Slack announcement](https://replit.slack.com/archives/...)
+```
+
 ## Before/After Examples
 
 ### Example: Raw Input (from changelog_writer)
 
 ```markdown
+<!-- slack_timestamps: 123,456,789 -->
+
+# Changelog: January 15, 2025
+
 ## Updates for this week
 
 We shipped a new dashboard!
@@ -97,14 +141,20 @@ We shipped a new dashboard!
 
 Also fixed some bugs in the editor.
 
+[Slack announcement](https://replit.slack.com/archives/C123/p456)
+
 ### SAML improvements
 
 SSO setup is now easier with better error messages.
+
+[Slack announcement](https://replit.slack.com/archives/C123/p789)
 ```
 
 ### Example: Correctly Formatted Output (from template_formatter)
 
 ```markdown
+<!-- slack_timestamps: 123,456,789 -->
+
 ---
 title: January 15, 2025
 description: 2 min read
@@ -114,14 +164,13 @@ import { AuthorCard } from '/snippets/author-card.mdx';
 
 <AuthorCard/>
 
-## Platform updates
+## What's new
 
-* [New dashboard]
-* [Editor bug fixes]
+* [New dashboard](#new-dashboard)
+* [Editor bug fixes](#editor-bug-fixes)
+* [SAML improvements](#saml-improvements)
 
-## Teams and Enterprise
-
-* [SAML improvements]
+## Platform
 
 ### New dashboard
 
@@ -134,6 +183,8 @@ We shipped a new dashboard with improved metrics visibility.
 ### Editor bug fixes
 
 Fixed several bugs in the editor for a smoother experience.
+
+## Teams and Enterprise
 
 ### SAML improvements
 
@@ -165,17 +216,20 @@ Before completing the formatting task, verify:
 ### Structure
 - [ ] Frontmatter uses `add_changelog_frontmatter` tool (not manually written)
 - [ ] Title format is "Month DD, YYYY" (e.g., "January 15, 2025")
-- [ ] "## Platform updates" section appears first
-- [ ] "## Teams and Enterprise" section appears second (only if relevant content exists)
+- [ ] No H1 heading after frontmatter (no `# Changelog:...`)
+- [ ] "## What's new" section with anchor-linked TOC appears first (after AuthorCard)
+- [ ] "## Platform" section appears after What's new
+- [ ] "## Teams and Enterprise" section appears after Platform (only if relevant content exists)
+- [ ] Features use `###` headings under their respective sections
 - [ ] No duplicate section headers
-- [ ] Bullet summary list appears directly after each `##` header
-- [ ] Detailed `###` sections appear after all bullet summaries
+- [ ] No horizontal rules (`---`) between sections
 
-### Bullet Lists
+### Bullet Lists (in What's new section)
 - [ ] Use `*` for bullets (not `-` or `+`)
+- [ ] Each bullet links to anchor: `* [Feature Name](#feature-name)`
+- [ ] Anchor format: lowercase, hyphens for spaces
 - [ ] One blank line after section header, before first bullet
 - [ ] No blank lines between bullet items
-- [ ] One blank line after bullet list, before first `###` section
 
 ### Media
 - [ ] All media wrapped in `<Frame>` tags
@@ -190,6 +244,7 @@ Before completing the formatting task, verify:
 - [ ] Alt text is descriptive (not "image" or "screenshot")
 - [ ] No typos in section headers
 - [ ] Consistent capitalization per DOCS_STYLE_GUIDE.md
+- [ ] **No Slack announcement links** in final output
 
 ## For Complete Reference
 
@@ -202,3 +257,5 @@ Before completing the formatting task, verify:
 - Preserve brand voice and style from original content
 - Ensure all media has descriptive alt text
 - Keep formatting consistent throughout
+- **Remove all Slack links from final output**
+- **Preserve the slack_timestamps HTML comment at the top** (needed for idempotency)
