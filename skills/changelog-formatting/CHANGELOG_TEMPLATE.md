@@ -1,4 +1,5 @@
-title: []
+---
+title: [Month Day, Year]
 description: 2 min read
 ---
 
@@ -13,16 +14,17 @@ import { AuthorCard } from '/snippets/author-card.mdx';
 * [Update 3]
 
 ## Teams and Enterprise
+
 * [Update 4]
 * [Update 5]
 
 ### [Update 1]
 
 <Frame>
-  <img src="/images/changelog/YYYY-MM-DD/image-filename.png" alt="Image description" />
+  <img src="/images/changelog/YYYY-MM-DD/image-filename.png" alt="Descriptive alt text" />
 </Frame>
 
-[Description using guidlines from docs repo]
+[Description following DOCS_STYLE_GUIDE.md guidelines]
 
 ### [Update with Video]
 
@@ -30,27 +32,24 @@ import { AuthorCard } from '/snippets/author-card.mdx';
   <video src="/images/changelog/YYYY-MM-DD/video-filename.mp4" controls />
 </Frame>
 
-[Description using guidlines from docs repo]
+[Description following DOCS_STYLE_GUIDE.md guidelines]
 
 ### [Update 2]
 
-[Description using guidlines from docs repo]
+[Description following DOCS_STYLE_GUIDE.md guidelines]
 
 ### [Update 3]
 
 <Frame>
-  <img src="/images/changelog/YYYY-MM-DD/filename" alt="Image description" />
+  <img src="/images/changelog/YYYY-MM-DD/feature.png" alt="Descriptive alt text" />
 </Frame>
 
-[Description using guidlines from docs repo]
-
-
-## Teams and Enterprise
+[Description following DOCS_STYLE_GUIDE.md guidelines]
 
 ### [Update 4]
 
-[Description using guidlines from docs repo]
+[Description following DOCS_STYLE_GUIDE.md guidelines]
 
 ### [Update 5]
 
-[Description using guidlines from docs repo]
+[Description following DOCS_STYLE_GUIDE.md guidelines]
