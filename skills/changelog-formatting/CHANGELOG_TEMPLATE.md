@@ -7,49 +7,37 @@ import { AuthorCard } from '/snippets/author-card.mdx';
 
 <AuthorCard/>
 
-## Platform updates
+## What's new
 
-* [Update 1]
-* [Update 2]
-* [Update 3]
+* [Feature One](#feature-one)
+* [Feature Two](#feature-two)
+* [Feature Three](#feature-three)
+* [Enterprise Feature](#enterprise-feature)
 
-## Teams and Enterprise
+## Platform
 
-* [Update 4]
-* [Update 5]
+### Feature One
 
-### [Update 1]
+Description of feature one following DOCS_STYLE_GUIDE.md guidelines.
+
+### Feature Two
 
 <Frame>
   <img src="/images/changelog/YYYY-MM-DD/image-filename.png" alt="Descriptive alt text" />
 </Frame>
 
-[Description following DOCS_STYLE_GUIDE.md guidelines]
+Description of feature two following DOCS_STYLE_GUIDE.md guidelines.
 
-### [Update with Video]
+### Feature Three
 
 <Frame>
   <video src="/images/changelog/YYYY-MM-DD/video-filename.mp4" controls />
 </Frame>
 
-[Description following DOCS_STYLE_GUIDE.md guidelines]
+Description of feature three following DOCS_STYLE_GUIDE.md guidelines.
 
-### [Update 2]
+## Teams and Enterprise
 
-[Description following DOCS_STYLE_GUIDE.md guidelines]
+### Enterprise Feature
 
-### [Update 3]
-
-<Frame>
-  <img src="/images/changelog/YYYY-MM-DD/feature.png" alt="Descriptive alt text" />
-</Frame>
-
-[Description following DOCS_STYLE_GUIDE.md guidelines]
-
-### [Update 4]
-
-[Description following DOCS_STYLE_GUIDE.md guidelines]
-
-### [Update 5]
-
-[Description following DOCS_STYLE_GUIDE.md guidelines]
+Description of enterprise feature following DOCS_STYLE_GUIDE.md guidelines.
