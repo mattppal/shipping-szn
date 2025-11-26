@@ -11,7 +11,6 @@ from dotenv import load_dotenv
 from slugify import slugify
 
 import requests
-from claude_agent_sdk import tool
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
@@ -198,15 +197,9 @@ def process_message_files(
     return processed_files
 
 
-@tool(
-    name="fetch_messages_from_channel",
-    description="Fetch messages from a Slack channel within a specified time range. Downloads all media files (images, videos) to ./docs/updates/media/YYYY-MM-DD/. Processes main messages and thread replies. Can skip downloading media files that already exist locally.",
-    input_schema={
-        "channel_id": str,
-        "days_back": int,
-    },
-)
-async def fetch_messages_from_channel(args: dict[str, Any]) -> dict[str, Any]:
+async def fetch_messages_from_channel(
+    channel_id: str, days_back: int = DEFAULT_DAYS_BACK
+) -> dict[str, Any]:
     """Fetch messages from a Slack channel with all media and threads.
 
     Args:
@@ -217,15 +210,6 @@ async def fetch_messages_from_channel(args: dict[str, Any]) -> dict[str, Any]:
     skip_existing = True
 
     try:
-        channel_id = args.get("channel_id")
-        days_back = int(args.get("days_back", DEFAULT_DAYS_BACK))
-
-        if not channel_id:
-            return {
-                "content": [{"type": "text", "text": "Error: channel_id is required"}],
-                "is_error": True,
-            }
-
         end_time = datetime.now()
         start_time = end_time - timedelta(days=days_back)
 

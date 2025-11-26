@@ -9,6 +9,8 @@ from claude_agent_sdk import (
 )
 
 from servers.config import MCP_SERVERS
+from servers.slack_tools import fetch_messages_from_channel
+from servers.github_tools import create_changelog_pr, add_changelog_frontmatter
 from util.messages import display_message
 
 load_dotenv()
@@ -27,12 +29,12 @@ permissions = {
     "web_search": "WebSearch",
     "search_mintlify": "mcp__mintlify__SearchMintlify",
     "search_replit": "mcp__replit__SearchReplit",
-    # github tools
-    "create_changelog_pr": "mcp__github_changelog__create_changelog_pr",
-    "add_changelog_frontmatter": "mcp__github_changelog__add_changelog_frontmatter",
+    # github tools (native)
+    "create_changelog_pr": create_changelog_pr,
+    "add_changelog_frontmatter": add_changelog_frontmatter,
     "update_pull_request": "mcp__github__update_pull_request",
-    # slack tools
-    "fetch_messages_from_channel": "mcp__slack_updates__fetch_messages_from_channel",
+    # slack tools (native)
+    "fetch_messages_from_channel": fetch_messages_from_channel,
 }
 
 

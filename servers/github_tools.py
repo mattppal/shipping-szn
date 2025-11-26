@@ -10,7 +10,6 @@ from collections import OrderedDict
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from claude_agent_sdk import tool
 from dotenv import load_dotenv
 from github import Github
 from github.GitTree import GitTree
@@ -464,32 +463,18 @@ def update_docs_json_content(docs_content: str, year: str, month: str, day: str)
     return json.dumps(docs_data, indent=2)
 
 
-@tool(
-    name="add_changelog_frontmatter",
-    description="Add proper frontmatter to changelog content. Takes raw content and a date, returns content with correctly formatted frontmatter including title, description, and AuthorCard import.",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "content": {
-                "type": "string",
-                "description": "Raw changelog content (without frontmatter)",
-            },
-            "date": {
-                "type": "string",
-                "description": "Date in format YYYY-MM-DD",
-            },
-        },
-        "required": ["content", "date"],
-    },
-)
-async def add_changelog_frontmatter(args: Dict[str, Any]) -> Dict[str, Any]:
+async def add_changelog_frontmatter(content: str, date: str) -> Dict[str, Any]:
     """Add properly formatted frontmatter to changelog content.
+
+    Args:
+        content: Raw changelog content (without frontmatter)
+        date: Date in format YYYY-MM-DD
 
     Returns changelog content with frontmatter ready to be written to file.
     """
     try:
-        content = args.get("content", "").strip()
-        date_str = args.get("date")
+        content = content.strip()
+        date_str = date
 
         if not date_str:
             return _error_response("Error: date is required (format: YYYY-MM-DD)")
@@ -531,41 +516,14 @@ import {{ AuthorCard }} from '/snippets/author-card.mdx';
         return _error_response(f"Unexpected error: {str(e)}")
 
 
-@tool(
-    name="create_changelog_pr",
-    description="Create a GitHub PR with a changelog file. Handles branch creation, file uploads (changelog + media), docs.json updates, and PR creation. Provide either the local path to the changelog file OR the markdown content directly. Media files should be provided as a list of local file paths.",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "changelog_path": {
-                "type": "string",
-                "description": "Local path to changelog file (e.g., ./docs/updates/2025-01-15.md)",
-            },
-            "changelog_content": {
-                "type": "string",
-                "description": "OR provide markdown content directly (optional if changelog_path provided)",
-            },
-            "media_files": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "List of local file paths to media files to upload (optional). If not provided, will automatically discover all files in ./docs/updates/media/YYYY-MM-DD/",
-            },
-            "date_override": {
-                "type": "string",
-                "description": "Override date detection (format: YYYY-MM-DD) (optional)",
-            },
-            "pr_title": {
-                "type": "string",
-                "description": "Custom PR title (optional, will be auto-generated if not provided)",
-            },
-            "draft": {
-                "type": "boolean",
-                "description": "Create as draft PR (default: True)",
-            },
-        },
-    },
-)
-async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
+async def create_changelog_pr(
+    changelog_path: Optional[str] = None,
+    changelog_content: Optional[str] = None,
+    media_files: Optional[list[str]] = None,
+    date_override: Optional[str] = None,
+    pr_title: Optional[str] = None,
+    draft: bool = True,
+) -> Dict[str, Any]:
     """Create a complete changelog PR with all necessary files and updates.
 
     This tool handles the entire workflow:
@@ -575,14 +533,19 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
     4. Updates docs.json with the new changelog entry
     5. Creates a pull request
 
-    Returns a dictionary with PR URL and summary for Claude Agent SDK.
+    Args:
+        changelog_path: Local path to changelog file (e.g., ./docs/updates/2025-01-15.md)
+        changelog_content: OR provide markdown content directly (optional if changelog_path provided)
+        media_files: List of local file paths to media files to upload (optional, auto-discovered if not provided)
+        date_override: Override date detection (format: YYYY-MM-DD) (optional)
+        pr_title: Custom PR title (optional, will be auto-generated if not provided)
+        draft: Create as draft PR (default: True)
+
+    Returns a dictionary with PR URL and summary.
     """
     try:
         repo = get_repo()
         default_branch = repo.default_branch
-
-        changelog_path = args.get("changelog_path")
-        changelog_content = args.get("changelog_content")
 
         if not changelog_path and not changelog_content:
             return _error_response(
@@ -596,6 +559,8 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
             except Exception as e:
                 return _error_response(f"Error reading changelog file: {str(e)}")
 
+        # Build args dict for _parse_date_from_args compatibility
+        args = {"date_override": date_override}
         try:
             date_info = _parse_date_from_args(args, changelog_path)
         except ValueError as e:
@@ -622,9 +587,10 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
                 )
             )
 
-        media_files = args.get("media_files", [])
+        if media_files is None:
+            media_files = []
 
-        if media_files and not isinstance(media_files, list):
+        if not isinstance(media_files, list):
             return _error_response(
                 f"Error: media_files must be a list, got {type(media_files).__name__}. Value: {repr(media_files)}"
             )
@@ -688,12 +654,12 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
 
             uploaded_files = list(files_to_commit.keys())
 
-        pr_title = args.get("pr_title") or f"[BOT] Changelog: {date_str}"
+        final_pr_title = pr_title or f"[BOT] Changelog: {date_str}"
         pr_body = format_pr_body(date_str, changelog_remote_path, media_count)
-        is_draft = args.get("draft", True)
+        is_draft = draft
 
         pr = repo.create_pull(
-            title=pr_title,
+            title=final_pr_title,
             body=pr_body,
             head=branch_name,
             base=default_branch,
@@ -710,7 +676,7 @@ async def create_changelog_pr(args: Dict[str, Any]) -> Dict[str, Any]:
         summary += f"Date: {date_str}\n"
         summary += f"Branch: {branch_name}\n"
         summary += f"PR URL: {pr.html_url}\n"
-        summary += f"PR #{pr.number}: {pr_title}\n\n"
+        summary += f"PR #{pr.number}: {final_pr_title}\n\n"
         summary += f"Files uploaded ({len(uploaded_files)}):\n"
         for file_path in uploaded_files:
             summary += f"   {file_path}\n"

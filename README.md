@@ -121,16 +121,21 @@ Skills reduce context window usage (~100 tokens metadata vs thousands embedded).
 
 **Learn more:** [Claude Agent SDK Skills Documentation](https://docs.anthropic.com/claude/docs/claude-skills)
 
-### MCP Servers
+### MCP Servers & Native Tools
 
-Integrates with Model Context Protocol (MCP) servers:
+External MCP servers for third-party integrations:
 
 - **GitHub MCP**: Pull request and repository management
-- **Slack MCP**: Message fetching and threading
 - **Mintlify MCP**: Documentation search
 - **Replit MCP**: Replit documentation search
 
-Custom MCP servers (`slack_updates`, `github_changelog`) use `create_sdk_mcp_server()`.
+Native tools for deterministic operations (simpler, no MCP overhead):
+
+- **fetch_messages_from_channel**: Slack message fetching with media downloads
+- **create_changelog_pr**: GitHub PR creation with file uploads
+- **add_changelog_frontmatter**: Changelog formatting
+
+**Why native tools?** Per [Anthropic's guidance](https://www.anthropic.com/engineering/code-execution-with-mcp), MCP is intended for scalable, agentic systems with many integrations. For deterministic, low-scale operations like these 3 tools, native functions are simpler and more efficient.
 
 **Learn more:** [MCP Documentation](https://modelcontextprotocol.io/) | [Claude Agent SDK MCP Integration](https://docs.anthropic.com/claude/docs/mcp-integration)
 
@@ -211,9 +216,9 @@ Edit files in `skills/*/`. Changes take effect on next run without restart.
 .
 ├── main.py                    # Main orchestrator
 ├── servers/
-│   ├── config.py              # MCP server configuration
-│   ├── github_tools.py        # GitHub integration (custom MCP tools)
-│   └── slack_tools.py         # Slack integration (custom MCP tools)
+│   ├── config.py              # External MCP server configuration
+│   ├── github_tools.py        # GitHub integration (native tools)
+│   └── slack_tools.py         # Slack integration (native tools)
 ├── skills/                    # Claude Skills (auto-discovered)
 │   ├── brand-writing/
 │   ├── changelog-formatting/
@@ -236,11 +241,11 @@ Edit files in `skills/*/`. Changes take effect on next run without restart.
 5. Routes to `pr_writer` to create GitHub PR
 6. Returns PR URL
 
-### MCP Server Links
+### Reference Links
 
 - [MCP Documentation](https://modelcontextprotocol.io/)
 - [Claude Agent SDK MCP Integration](https://docs.anthropic.com/claude/docs/mcp-integration)
-- [Creating Custom MCP Servers](https://docs.anthropic.com/claude/docs/mcp-integration#custom-mcp-servers)
+- [Code Execution with MCP (Native Tools Guidance)](https://www.anthropic.com/engineering/code-execution-with-mcp)
 - [GitHub MCP Server](https://github.com/modelcontextprotocol/servers/tree/main/src/github)
 
 ## License
