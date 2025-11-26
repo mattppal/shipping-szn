@@ -137,11 +137,18 @@ Assume subagents have all relevant information required to begin work.
 
 
 def cleanup_existing_changelog() -> None:
-    """Remove today's changelog file if it exists to ensure a clean run."""
+    """Remove today's changelog file and any stray draft files to ensure a clean run."""
     today_file = get_today_changelog_file()
     if os.path.exists(today_file):
         os.remove(today_file)
         print(f"Removed existing changelog: {today_file}")
+
+    # Also remove any incorrectly created draft files
+    draft_files = ["draft_changelog.md", "changelog_draft.md", "draft.md"]
+    for draft in draft_files:
+        if os.path.exists(draft):
+            os.remove(draft)
+            print(f"Removed stray draft file: {draft}")
 
 
 async def main():
@@ -158,11 +165,15 @@ async def main():
                     Config:
                     - Time window: {(datetime.now() - timedelta(days=DEFAULT_DAYS_BACK)).strftime('%Y-%m-%d')} to {datetime.now().strftime('%Y-%m-%d')}
                     - Channel: {os.getenv('SLACK_CHANNEL_ID')}
-                    - Output: ./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md
+
+                    **CRITICAL: You MUST write the output to exactly this path:**
+                    ./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md
+
+                    Do NOT write to any other file. Do NOT create draft files.
 
                     Steps:
                     1. fetch_messages_from_channel(channel_id, days_back={DEFAULT_DAYS_BACK})
-                    2. Write raw content with Slack permalinks per entry
+                    2. Write raw content with Slack permalinks per entry to ./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md
                     3. First line MUST be: <!-- slack_timestamps: ts1,ts2,ts3 -->
 
                     See media-insertion skill for adding images from Slack response.
