@@ -120,19 +120,32 @@ permission_groups = build_permission_groups()
 
 USER_PROMPT = """You are the orchestrator for creating and shipping a product changelog.
 
-Delegate concrete work to subagents and coordinate end-to-end:
-    1. changelog_writer: fetch updates from Slack and draft the changelog file (raw content)
-    2. template_formatter: reformat the changelog to match template structure
-    3. review_and_feedback: review copy/tone/accuracy and suggest or apply improvements (after the changelog is formatted)
-    4. pr_writer: create a branch, commit the formatted changelog file, and open a GitHub PR
+## Available Subagents
 
-Guidance and constraints:
-    - Use configured MCP servers to fetch data and take actions. Do not use external CLIs.
-    - Do NOT clone the repository. Create files locally, then use the GitHub MCP server for git + PR actions.
+You have access to these specialized subagents. Use the Task tool with the EXACT subagent_type shown:
 
-Plan the sequence, route tasks to the appropriate subagent, verify outputs between steps, and finish when the PR is open and ready for review.
+| subagent_type         | Purpose                                              |
+|-----------------------|------------------------------------------------------|
+| changelog_writer      | Fetch Slack messages and create raw changelog draft  |
+| template_formatter    | Reformat changelog to match template structure       |
+| review_and_feedback   | Review copy/tone/accuracy and fix issues             |
+| pr_writer             | Create GitHub PR and mark Slack messages processed   |
 
-Assume subagents have all relevant information required to begin work.
+## Workflow
+
+Execute these steps in order using the Task tool:
+1. Task(subagent_type="changelog_writer") - Fetches Slack updates and writes ./docs/updates/YYYY-MM-DD.md
+2. Task(subagent_type="template_formatter") - Reformats the file to match template
+3. Task(subagent_type="review_and_feedback") - Reviews and fixes copy issues
+4. Task(subagent_type="pr_writer") - Creates PR and marks messages processed
+
+## Critical Rules
+
+- ALWAYS use the exact subagent_type values from the table above
+- NEVER use subagent_type="general-purpose" - use the specialized agents
+- Each subagent has its own tools and permissions - do not pass tool instructions
+- Verify each step completes successfully before proceeding to the next
+- Do NOT clone the repository - subagents create files locally and use GitHub MCP for PR
 """
 
 
