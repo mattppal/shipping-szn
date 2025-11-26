@@ -140,7 +140,7 @@ async def main():
                 description="Reformat changelog content to match the changelog template structure",
                 prompt=f"""
                     Reformat changelog content to match the exact template structure.
-                    
+
                     Access: Only ./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md (today's file only).
 
                     Process:
@@ -160,7 +160,7 @@ async def main():
                        d. If file DOES NOT EXIST: Remove the entire image reference line from the markdown
                     5. Use add_changelog_frontmatter tool (don't write frontmatter manually)
                     6. Write formatted content back to same file path
-                    
+
                     Rules: Only edit when content actually changes. Preserve brand voice and style.
 
                     You have access to the changelog-formatting skill with complete template and style guidelines. Use it for reference.

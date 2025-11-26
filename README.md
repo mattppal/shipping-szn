@@ -150,10 +150,11 @@ External MCP servers for third-party integrations:
 Native tools for deterministic operations (simpler, no MCP overhead):
 
 - **fetch_messages_from_channel**: Slack message fetching with media downloads
+- **mark_messages_processed**: Adds emoji reaction to processed Slack messages for idempotency
 - **create_changelog_pr**: GitHub PR creation with file uploads
 - **add_changelog_frontmatter**: Changelog formatting
 
-**Why native tools?** Per [Anthropic's guidance](https://www.anthropic.com/engineering/code-execution-with-mcp), MCP is intended for scalable, agentic systems with many integrations. For deterministic, low-scale operations like these 3 tools, native functions are simpler and more efficient.
+**Why native tools?** Per [Anthropic's guidance](https://www.anthropic.com/engineering/code-execution-with-mcp), MCP is intended for scalable, agentic systems with many integrations. For deterministic, low-scale operations like these, native functions are simpler and more efficient.
 
 **Learn more:** [MCP Documentation](https://modelcontextprotocol.io/) | [Claude Agent SDK MCP Integration](https://docs.anthropic.com/claude/docs/mcp-integration)
 
@@ -240,7 +241,8 @@ Edit files in `skills/*/`. Changes take effect on next run without restart.
 ├── skills/                    # Claude Skills (auto-discovered)
 │   ├── brand-writing/
 │   ├── changelog-formatting/
-│   └── doc-quality/
+│   ├── doc-quality/
+│   └── media-insertion/
 ├── util/
 │   └── messages.py            # Message display utilities
 ├── docs/
@@ -253,10 +255,10 @@ Edit files in `skills/*/`. Changes take effect on next run without restart.
 ### Workflow
 
 1. Orchestrator receives prompt to create changelog
-2. Routes to `changelog_writer` to fetch Slack messages
-3. Routes to `template_formatter` to format content
+2. Routes to `changelog_writer` to fetch Slack messages (14-day lookback, skips already-processed messages)
+3. Routes to `template_formatter` to format content and wrap media in `<Frame>` tags
 4. Routes to `review_and_feedback` to review quality
-5. Routes to `pr_writer` to create GitHub PR
+5. Routes to `pr_writer` to create GitHub PR and mark messages processed with `:summarizer_ship:` reaction
 6. Returns PR URL
 
 ### Reference Links
