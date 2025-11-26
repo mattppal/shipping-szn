@@ -19,7 +19,7 @@ load_dotenv()
 # Model configuration
 ORCHESTRATOR_MODEL = os.getenv("ORCHESTRATOR_MODEL", "sonnet")
 FAST_MODEL = os.getenv("FAST_MODEL", "haiku")
-HIGH_POWER_MODEL = os.getenv("HIGH_POWER_MODEL", "sonnet")
+HIGH_POWER_MODEL = os.getenv("HIGH_POWER_MODEL", "opus")
 
 # Create SDK MCP server for native tools
 NATIVE_TOOLS_SERVER = create_sdk_mcp_server(
@@ -43,63 +43,79 @@ CHANGELOG_FILE_PATTERN = "./docs/updates/{date}.md"
 # - Final GitHub location:       docs/images/changelog/YYYY-MM-DD/filename
 
 
+def get_today_changelog_file() -> str:
+    """Get path to today's changelog file."""
+    today = datetime.now().strftime("%Y-%m-%d")
+    return CHANGELOG_FILE_PATTERN.format(date=today)
+
+
+# Base permissions dictionary - tools and broad access patterns
 permissions = {
-    # read/write/edit/glob docs (excluding media files)
-    "read_docs": "Read(./docs/**/*.md)",
-    "write_docs": "Write(./docs/**/*.md)",
-    "edit_docs": "Edit(./docs/**/*.md)",
-    "glob_docs": "Glob(./docs/**/*.md)",
-    # search tools
+    # Search tools (external lookups)
     "web_search": "WebSearch",
     "search_mintlify": "mcp__mintlify__SearchMintlify",
     "search_replit": "mcp__replit__SearchReplit",
-    # github tools (via GitHub MCP server)
-    "update_pull_request": "mcp__github__update_pull_request",
-    # slack tools (native - via SDK MCP server)
+    # Slack tools (native - via SDK MCP server)
     "fetch_messages_from_channel": "mcp__native_tools__fetch_messages_from_channel",
     "mark_messages_processed": "mcp__native_tools__mark_messages_processed",
-    # github tools (native - via SDK MCP server)
+    # GitHub tools (native - via SDK MCP server)
     "add_changelog_frontmatter": "mcp__native_tools__add_changelog_frontmatter",
     "create_changelog_pr": "mcp__native_tools__create_changelog_pr",
 }
 
 
-def get_today_changelog_permissions() -> list[str]:
-    """Get permissions restricted to today's changelog file only."""
-    today = datetime.now().strftime("%Y-%m-%d")
-    changelog_file = CHANGELOG_FILE_PATTERN.format(date=today)
-    return [
-        f"Read({changelog_file})",
-        f"Write({changelog_file})",
-        f"Edit({changelog_file})",
-    ]
+def build_permission_groups() -> dict[str, list[str]]:
+    """Build permission groups with today's date.
+
+    Called at runtime to ensure correct date is used.
+    Each agent gets minimum required permissions (principle of least privilege).
+    """
+    today_file = get_today_changelog_file()
+
+    return {
+        # changelog_writer: Fetches Slack messages, creates initial draft
+        # NEEDS: Slack fetch, write today's file, search for doc links
+        # DOES NOT NEED: read (creating new), edit (not modifying), broad docs access
+        "changelog_writer": [
+            permissions["fetch_messages_from_channel"],
+            f"Write({today_file})",  # Create new file only
+            permissions["search_replit"],  # Find relevant doc links
+        ],
+
+        # template_formatter: Reformats draft to match template
+        # NEEDS: Read/write/edit today's file, frontmatter tool
+        # DOES NOT NEED: Slack, GitHub, search, other files
+        "template_formatter": [
+            f"Read({today_file})",
+            f"Write({today_file})",
+            f"Edit({today_file})",
+            permissions["add_changelog_frontmatter"],
+        ],
+
+        # review_and_feedback: Reviews and fixes issues in changelog
+        # NEEDS: Read/edit today's file
+        # DOES NOT NEED: Write (edit is sufficient), Slack, GitHub, broad access
+        # OPTIONAL: Search tools for verification (keeping for link validation)
+        "review_and_feedback": [
+            f"Read({today_file})",
+            f"Edit({today_file})",
+            permissions["search_replit"],  # Validate doc links
+            permissions["search_mintlify"],  # Validate doc links
+        ],
+
+        # pr_writer: Creates GitHub PR, marks Slack messages as processed
+        # NEEDS: PR tool, Slack mark tool, read today's file (for timestamps)
+        # DOES NOT NEED: Write/edit (PR tool handles uploads), glob, broad access
+        "pr_writer": [
+            permissions["create_changelog_pr"],
+            permissions["mark_messages_processed"],
+            f"Read({today_file})",  # Read timestamps from first line
+        ],
+    }
 
 
-permission_groups = {
-    "review_and_feedback": [
-        *get_today_changelog_permissions(),  # Only today's changelog file
-        permissions["web_search"],
-        permissions["search_mintlify"],
-        permissions["search_replit"],
-    ],
-    "changelog_writer": [
-        permissions["fetch_messages_from_channel"],
-        permissions["read_docs"],
-        permissions["write_docs"],
-        permissions["edit_docs"],
-        permissions["search_replit"],
-    ],
-    "template_formatter": [
-        *get_today_changelog_permissions(),
-        permissions["add_changelog_frontmatter"],
-    ],
-    "pr_writer": [
-        permissions["create_changelog_pr"],
-        permissions["mark_messages_processed"],
-        permissions["read_docs"],
-        permissions["glob_docs"],
-    ],
-}
+# Build permission groups at module load time
+permission_groups = build_permission_groups()
 
 
 USER_PROMPT = """You are the orchestrator for creating and shipping a product changelog.
