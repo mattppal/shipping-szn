@@ -350,3 +350,84 @@ async def fetch_messages_from_channel(args: dict[str, Any]) -> dict[str, Any]:
             "content": [{"type": "text", "text": f"Unexpected error: {str(e)}"}],
             "is_error": True,
         }
+
+
+PROCESSED_EMOJI = "summarizer_ship"
+
+
+@tool(
+    name="mark_messages_processed",
+    description=f"Add a :{PROCESSED_EMOJI}: reaction emoji to Slack messages to mark them as processed. Used for idempotency tracking to avoid re-processing the same messages.",
+    input_schema={
+        "channel_id": str,
+        "message_timestamps": list,
+    },
+)
+async def mark_messages_processed(args: dict[str, Any]) -> dict[str, Any]:
+    """Add reaction emoji to processed Slack messages for idempotency.
+
+    Args:
+        args: Dictionary with:
+            - channel_id: The Slack channel ID
+            - message_timestamps: List of message 'ts' values to mark as processed
+
+    Returns a dictionary with success/failure counts.
+    """
+    try:
+        channel_id = args.get("channel_id")
+        timestamps = args.get("message_timestamps", [])
+
+        if not channel_id:
+            return {
+                "content": [{"type": "text", "text": "Error: channel_id is required"}],
+                "is_error": True,
+            }
+
+        if not timestamps:
+            return {
+                "content": [{"type": "text", "text": "Error: message_timestamps is required and must not be empty"}],
+                "is_error": True,
+            }
+
+        success_count = 0
+        already_reacted = 0
+        failed = []
+
+        for ts in timestamps:
+            try:
+                slack_client.reactions_add(
+                    channel=channel_id,
+                    name=PROCESSED_EMOJI,
+                    timestamp=ts
+                )
+                success_count += 1
+            except SlackApiError as e:
+                if e.response.get("error") == "already_reacted":
+                    already_reacted += 1
+                else:
+                    failed.append({"ts": ts, "error": str(e)})
+
+        summary = f"Marked {success_count} messages as processed with :{PROCESSED_EMOJI}:\n"
+        if already_reacted > 0:
+            summary += f"Skipped {already_reacted} messages (already marked)\n"
+        if failed:
+            summary += f"Failed to mark {len(failed)} messages:\n"
+            for f in failed[:5]:
+                summary += f"  - {f['ts']}: {f['error']}\n"
+            if len(failed) > 5:
+                summary += f"  ... and {len(failed) - 5} more\n"
+
+        return {
+            "content": [{"type": "text", "text": summary}],
+        }
+
+    except SlackApiError as e:
+        return {
+            "content": [{"type": "text", "text": f"Slack API Error: {str(e)}"}],
+            "is_error": True,
+        }
+    except Exception as e:
+        return {
+            "content": [{"type": "text", "text": f"Unexpected error: {str(e)}"}],
+            "is_error": True,
+        }

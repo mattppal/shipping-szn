@@ -10,7 +10,8 @@ from claude_agent_sdk import (
 )
 
 from servers.config import MCP_SERVERS
-from servers.slack_tools import fetch_messages_from_channel
+from servers.slack_tools import fetch_messages_from_channel, mark_messages_processed
+from servers.github_tools import add_changelog_frontmatter, create_changelog_pr
 from util.messages import display_message
 
 load_dotenv()
@@ -19,7 +20,12 @@ load_dotenv()
 NATIVE_TOOLS_SERVER = create_sdk_mcp_server(
     name="native_tools",
     version="1.0.0",
-    tools=[fetch_messages_from_channel],
+    tools=[
+        fetch_messages_from_channel,
+        mark_messages_processed,
+        add_changelog_frontmatter,
+        create_changelog_pr,
+    ],
 )
 
 DEFAULT_DAYS_BACK = 14
@@ -46,6 +52,10 @@ permissions = {
     "update_pull_request": "mcp__github__update_pull_request",
     # slack tools (native - via SDK MCP server)
     "fetch_messages_from_channel": "mcp__native_tools__fetch_messages_from_channel",
+    "mark_messages_processed": "mcp__native_tools__mark_messages_processed",
+    # github tools (native - via SDK MCP server)
+    "add_changelog_frontmatter": "mcp__native_tools__add_changelog_frontmatter",
+    "create_changelog_pr": "mcp__native_tools__create_changelog_pr",
 }
 
 
@@ -75,14 +85,14 @@ permission_groups = {
         permissions["edit_docs"],
         permissions["search_replit"],
     ],
-    "template_formatter": get_today_changelog_permissions(),
+    "template_formatter": [
+        *get_today_changelog_permissions(),
+        permissions["add_changelog_frontmatter"],
+    ],
     "pr_writer": [
-        permissions["update_pull_request"],
-        permissions["search_mintlify"],
-        permissions["web_search"],
+        permissions["create_changelog_pr"],
+        permissions["mark_messages_processed"],
         permissions["read_docs"],
-        permissions["write_docs"],
-        permissions["edit_docs"],
         permissions["glob_docs"],
     ],
 }
@@ -193,13 +203,7 @@ async def main():
                     You have access to skills for brand writing, documentation quality, and changelog formatting. Use them to guide your review.
                 """,
                 model="haiku",
-                tools=[
-                    permissions["read_docs"],
-                    permissions["edit_docs"],
-                    permissions["web_search"],
-                    permissions["search_mintlify"],
-                    permissions["search_replit"],
-                ],
+                tools=permission_groups["review_and_feedback"],
             ),
             "pr_writer": AgentDefinition(
                 description="Draft a PR using our brand guidelines and changelog format",
