@@ -84,6 +84,113 @@ Each section should have:
 - ❌ `/media/2025-01-15/file.png` (missing "images/changelog" - wrong)
 - ✅ `/images/changelog/2025-01-15/file.png` (correct CDN path)
 
+## Before/After Examples
+
+### Example: Raw Input (from changelog_writer)
+
+```markdown
+## Updates for this week
+
+We shipped a new dashboard!
+
+![New dashboard interface](./media/2025-01-15/dashboard.png)
+
+Also fixed some bugs in the editor.
+
+### SAML improvements
+
+SSO setup is now easier with better error messages.
+```
+
+### Example: Correctly Formatted Output (from template_formatter)
+
+```markdown
+---
+title: January 15, 2025
+description: 2 min read
+---
+
+import { AuthorCard } from '/snippets/author-card.mdx';
+
+<AuthorCard/>
+
+## Platform updates
+
+* [New dashboard]
+* [Editor bug fixes]
+
+## Teams and Enterprise
+
+* [SAML improvements]
+
+### New dashboard
+
+<Frame>
+  <img src="/images/changelog/2025-01-15/dashboard.png" alt="New dashboard interface" />
+</Frame>
+
+We shipped a new dashboard with improved metrics visibility.
+
+### Editor bug fixes
+
+Fixed several bugs in the editor for a smoother experience.
+
+### SAML improvements
+
+SSO setup is now easier with better error messages.
+```
+
+### Example: Handling Missing Media
+
+**Input with reference to non-existent file:**
+```markdown
+### Feature X
+
+![Screenshot](./media/2025-01-15/missing-file.png)
+
+Description of feature X.
+```
+
+**Output (missing file removed):**
+```markdown
+### Feature X
+
+Description of feature X.
+```
+
+## Formatting Checklist
+
+Before completing the formatting task, verify:
+
+### Structure
+- [ ] Frontmatter uses `add_changelog_frontmatter` tool (not manually written)
+- [ ] Title format is "Month DD, YYYY" (e.g., "January 15, 2025")
+- [ ] "## Platform updates" section appears first
+- [ ] "## Teams and Enterprise" section appears second (only if relevant content exists)
+- [ ] No duplicate section headers
+- [ ] Bullet summary list appears directly after each `##` header
+- [ ] Detailed `###` sections appear after all bullet summaries
+
+### Bullet Lists
+- [ ] Use `*` for bullets (not `-` or `+`)
+- [ ] One blank line after section header, before first bullet
+- [ ] No blank lines between bullet items
+- [ ] One blank line after bullet list, before first `###` section
+
+### Media
+- [ ] All media wrapped in `<Frame>` tags
+- [ ] Images use: `<Frame><img src="..." alt="..." /></Frame>`
+- [ ] Videos use: `<Frame><video src="..." controls /></Frame>`
+- [ ] All paths use CDN format: `/images/changelog/YYYY-MM-DD/filename`
+- [ ] No markdown image syntax remains (`![alt](path)`)
+- [ ] All referenced media files verified to exist
+- [ ] Non-existent media references removed entirely
+
+### Content
+- [ ] Alt text is descriptive (not "image" or "screenshot")
+- [ ] No typos in section headers
+- [ ] Consistent capitalization per DOCS_STYLE_GUIDE.md
+
 ## For Complete Reference
 
 - [CHANGELOG_TEMPLATE.md](CHANGELOG_TEMPLATE.md) - Full template structure
