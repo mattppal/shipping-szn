@@ -214,7 +214,9 @@ async def main():
             ),
         },
         system_prompt="You are an expert developer relations professional.",
-        permission_mode="default",
+        # bypassPermissions allows autonomous execution without manual approval.
+        # Security is enforced by each agent's tightly-scoped tool list (see permission_groups).
+        permission_mode="bypassPermissions",
         model=ORCHESTRATOR_MODEL,
         cwd="./",
         setting_sources=None,
