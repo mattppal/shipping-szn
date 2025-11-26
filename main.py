@@ -9,13 +9,13 @@ from claude_agent_sdk import (
 )
 
 from servers.config import MCP_SERVERS
-from servers.slack_tools import fetch_messages_from_channel
+from servers.slack_tools import fetch_messages_from_channel, mark_messages_processed
 from servers.github_tools import create_changelog_pr, add_changelog_frontmatter
 from util.messages import display_message
 
 load_dotenv()
 
-DEFAULT_DAYS_BACK = 7
+DEFAULT_DAYS_BACK = 14
 CHANGELOG_FILE_PATTERN = "./docs/updates/{date}.md"
 
 
@@ -35,6 +35,7 @@ permissions = {
     "update_pull_request": "mcp__github__update_pull_request",
     # slack tools (native)
     "fetch_messages_from_channel": fetch_messages_from_channel,
+    "mark_messages_processed": mark_messages_processed,
 }
 
 
@@ -69,6 +70,7 @@ permission_groups = {
     "pr_writer": [
         permissions["create_changelog_pr"],
         permissions["update_pull_request"],
+        permissions["mark_messages_processed"],
         permissions["search_mintlify"],
         permissions["web_search"],
         permissions["read_docs"],
@@ -116,7 +118,10 @@ async def main():
                     5. Create ./docs/updates/YYYY-MM-DD.md (today's date)
                     6. Add relevant Replit docs links (relative paths only)
                     7. Focus on content quality - template_formatter handles structure
-                    
+                    8. **CRITICAL FOR IDEMPOTENCY**: At the very top of the file (first line), add an HTML comment with message timestamps:
+                       <!-- slack_timestamps: ts1,ts2,ts3 -->
+                       where ts1, ts2, ts3 are the 'ts' values from each Slack message (e.g., 1234567890.123456)
+
                     Rules: Only read/write .md files. Only make edits that change content.
 
                     You have access to skills for brand writing, documentation quality, and media insertion. The media-insertion skill shows you exactly how to add images from Slack into the markdown.
@@ -179,14 +184,25 @@ async def main():
             "pr_writer": AgentDefinition(
                 description="Draft a PR using our brand guidelines and changelog format",
                 prompt=f"""
-                    Create GitHub PR with the formatted changelog.
+                    Create GitHub PR with the formatted changelog, then mark Slack messages as processed.
 
+                    Step 1: Create the PR
                     Use create_changelog_pr with:
                     - changelog_path: ./docs/updates/YYYY-MM-DD.md
                     - Do NOT pass media_files (auto-discovered)
-                    
+
                     The tool handles: branch creation, file uploads, docs.json updates, PR creation.
                     Repository: {os.getenv('GITHUB_REPO')}
+
+                    Step 2: Mark Slack messages as processed (ONLY after PR is created successfully)
+                    1. Read the changelog file at ./docs/updates/YYYY-MM-DD.md
+                    2. Find the HTML comment on the first line: <!-- slack_timestamps: ts1,ts2,ts3 -->
+                    3. Parse the comma-separated timestamps
+                    4. Call mark_messages_processed with:
+                       - channel_id: {os.getenv('SLACK_CHANNEL_ID')}
+                       - message_timestamps: [list of parsed timestamps]
+
+                    This adds a :summarizer_ship: reaction to each processed Slack message for idempotency.
                 """,
                 model="haiku",
                 tools=permission_groups["pr_writer"],
