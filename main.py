@@ -16,6 +16,11 @@ from util.messages import display_message
 
 load_dotenv()
 
+# Model configuration
+ORCHESTRATOR_MODEL = os.getenv("ORCHESTRATOR_MODEL", "sonnet")
+FAST_MODEL = os.getenv("FAST_MODEL", "haiku")
+HIGH_POWER_MODEL = os.getenv("HIGH_POWER_MODEL", "sonnet")
+
 # Create SDK MCP server for native tools
 NATIVE_TOOLS_SERVER = create_sdk_mcp_server(
     name="native_tools",
@@ -122,119 +127,69 @@ async def main():
             "changelog_writer": AgentDefinition(
                 description="Fetch updates from slack, summarize them, and add relevant links + context from the replit documentation and web search",
                 prompt=f"""
-                    You are a changelog writer. Create this week's changelog from Slack updates and related docs.
+                    Create changelog from Slack updates.
 
-                    Time window: {(datetime.now() - timedelta(days=DEFAULT_DAYS_BACK)).strftime('%Y-%m-%d')} to {datetime.now().strftime('%Y-%m-%d')}
-                    Slack channel ID: {os.getenv('SLACK_CHANNEL_ID')}
+                    Config:
+                    - Time window: {(datetime.now() - timedelta(days=DEFAULT_DAYS_BACK)).strftime('%Y-%m-%d')} to {datetime.now().strftime('%Y-%m-%d')}
+                    - Channel: {os.getenv('SLACK_CHANNEL_ID')}
+                    - Output: ./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md
 
-                    Process:
-                    1. Use fetch_messages_from_channel (channel_id, days_back={DEFAULT_DAYS_BACK}) to fetch Slack messages
-                    2. Extract product changes, summarize crisply, group logically
-                    3. **IMPORTANT**: Insert media files into content - check the Slack response for processed_files and add image references using `![alt text](./media/YYYY-MM-DD/filename)` format. The template_formatter will verify files exist and convert paths to CDN format.
-                    4. Include Slack message permalink for each entry
-                    5. Create ./docs/updates/YYYY-MM-DD.md (today's date)
-                    6. Add relevant Replit docs links (relative paths only)
-                    7. Focus on content quality - template_formatter handles structure
-                    8. **CRITICAL FOR IDEMPOTENCY**: At the very top of the file (first line), add an HTML comment with message timestamps:
-                       <!-- slack_timestamps: ts1,ts2,ts3 -->
-                       where ts1, ts2, ts3 are the 'ts' values from each Slack message (e.g., 1234567890.123456)
+                    Steps:
+                    1. fetch_messages_from_channel(channel_id, days_back={DEFAULT_DAYS_BACK})
+                    2. Write raw content with Slack permalinks per entry
+                    3. First line MUST be: <!-- slack_timestamps: ts1,ts2,ts3 -->
 
-                    Rules: Only read/write .md files. Only make edits that change content.
-
-                    You have access to skills for brand writing, documentation quality, and media insertion. The media-insertion skill shows you exactly how to add images from Slack into the markdown.
+                    See media-insertion skill for adding images from Slack response.
+                    See brand-writing skill for voice/tone.
                 """,
-                model="sonnet",
+                model=FAST_MODEL,
                 tools=permission_groups["changelog_writer"],
             ),
             "template_formatter": AgentDefinition(
                 description="Reformat changelog content to match the changelog template structure",
                 prompt=f"""
-                    Reformat changelog content to match the exact template structure.
+                    Reformat ./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md to match template.
 
-                    Access: Only ./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md (today's file only).
+                    Use add_changelog_frontmatter tool for frontmatter.
+                    Follow changelog-formatting skill exactly - it has the complete template, examples, and checklist.
 
-                    Process:
-                    1. Read ./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md
-                    2. Categorize updates: "Teams and Enterprise" (SSO, SAML, SCIM, Identity, Access Management, Viewer Seats, Groups, Permissions) or "Platform updates"
-                    3. Create structure:
-                       - Section headers: "## Platform updates" and "## Teams and Enterprise"
-                       - Bullet summaries at top: * [Update Name] for each section
-                       - Detailed sections: ### [Update Name] with full content below
-                    4. **CRITICAL - Handle media properly**:
-                       a. Find all markdown image references: `![alt](./media/YYYY-MM-DD/filename)`
-                       b. For each reference, verify the file exists at: `./docs/updates/media/YYYY-MM-DD/filename`
-                       c. If file EXISTS:
-                          - Convert path: `./media/YYYY-MM-DD/filename` → `/images/changelog/YYYY-MM-DD/filename`
-                          - Wrap images: `<Frame><img src="/images/changelog/YYYY-MM-DD/file.png" alt="..." /></Frame>`
-                          - Wrap videos: `<Frame><video src="/images/changelog/YYYY-MM-DD/file.mp4" controls /></Frame>`
-                       d. If file DOES NOT EXIST: Remove the entire image reference line from the markdown
-                    5. Use add_changelog_frontmatter tool (don't write frontmatter manually)
-                    6. Write formatted content back to same file path
-
-                    Rules: Only edit when content actually changes. Preserve brand voice and style.
-
-                    You have access to the changelog-formatting skill with complete template and style guidelines. Use it for reference.
+                    Key requirements:
+                    - Preserve slack_timestamps comment (first line)
+                    - Remove all Slack links from output
+                    - Remove H1 headings and horizontal rules
                 """,
-                model="sonnet",
+                model=FAST_MODEL,
                 tools=permission_groups["template_formatter"],
             ),
             "review_and_feedback": AgentDefinition(
                 description="Use this agent to review copy and provide feedback on the PR",
                 prompt="""
-                    Review changelog for clarity, tone, correctness, template compliance, and developer experience.
+                    Review changelog against:
+                    - changelog-formatting skill checklist (structure, media, no Slack links)
+                    - brand-writing skill (voice, tone, capitalization)
 
-                    **Formatting Checks (CRITICAL):**
-                    - Verify frontmatter was generated by tool (title format: "Month DD, YYYY")
-                    - Verify no duplicate section headers (especially "## Teams and Enterprise")
-                    - Verify bullet lists use `*` consistently (not `-` or `+`)
-                    - Verify all media is wrapped in <Frame> tags
-                    - Verify media paths use `/images/changelog/YYYY-MM-DD/` format (not ./media/)
-                    - Verify no markdown image syntax remains (`![alt](path)` should be converted to <Frame><img>)
-
-                    **Content Checks:**
-                    - Brand voice per brand-writing skill
-                    - Technical accuracy
-                    - Link validity (relative paths only)
-                    - Alt text quality (descriptive, not generic like "image" or "screenshot")
-
-                    Provide specific line-by-line corrections if issues found.
-                    Rules: Only read/write .md files. Only edit when content changes.
-
-                    You have access to skills for brand writing, documentation quality, and changelog formatting. Use them to guide your review.
+                    Fix issues directly. Provide line-by-line corrections if needed.
                 """,
-                model="haiku",
+                model=HIGH_POWER_MODEL,
                 tools=permission_groups["review_and_feedback"],
             ),
             "pr_writer": AgentDefinition(
                 description="Draft a PR using our brand guidelines and changelog format",
                 prompt=f"""
-                    Create GitHub PR with the formatted changelog, then mark Slack messages as processed.
+                    1. create_changelog_pr(changelog_path=./docs/updates/{datetime.now().strftime('%Y-%m-%d')}.md)
+                       Repository: {os.getenv('GITHUB_REPO')}
 
-                    Step 1: Create the PR
-                    Use create_changelog_pr with:
-                    - changelog_path: ./docs/updates/YYYY-MM-DD.md
-                    - Do NOT pass media_files (auto-discovered)
-
-                    The tool handles: branch creation, file uploads, docs.json updates, PR creation.
-                    Repository: {os.getenv('GITHUB_REPO')}
-
-                    Step 2: Mark Slack messages as processed (ONLY after PR is created successfully)
-                    1. Read the changelog file at ./docs/updates/YYYY-MM-DD.md
-                    2. Find the HTML comment on the first line: <!-- slack_timestamps: ts1,ts2,ts3 -->
-                    3. Parse the comma-separated timestamps
-                    4. Call mark_messages_processed with:
-                       - channel_id: {os.getenv('SLACK_CHANNEL_ID')}
-                       - message_timestamps: [list of parsed timestamps]
-
-                    This adds a :summarizer_ship: reaction to each processed Slack message for idempotency.
+                    2. After PR created, mark Slack messages processed:
+                       - Parse timestamps from first line: <!-- slack_timestamps: ts1,ts2,ts3 -->
+                       - mark_messages_processed(channel_id={os.getenv('SLACK_CHANNEL_ID')}, message_timestamps=[...])
                 """,
-                model="haiku",
+                model=FAST_MODEL,
                 tools=permission_groups["pr_writer"],
             ),
         },
         system_prompt="You are an expert developer relations professional.",
         permission_mode="bypassPermissions",
-        model=os.getenv("ORCHESTRATOR_MODEL"),
+        model=ORCHESTRATOR_MODEL,
         cwd="./",
         setting_sources=None,
         mcp_servers={**MCP_SERVERS, "native_tools": NATIVE_TOOLS_SERVER},
