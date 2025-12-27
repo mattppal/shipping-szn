@@ -1,0 +1,30 @@
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.mypy_cache/
+.pytest_cache/
+
+# Virtual environments
+.venv
+.git
+.env
+.channels_cache*.json
+.users_cache.json
+updates/
+docs/**/*/**
+node_modules/
+.DS_Store
+scratch.json
+attached_assets/
+# Generated AI tool configs (managed by rulesync)
+.claude/
+.cursor/
+.mcp.json
+.cursorignore
+.claudeignore
+
+# Conductor
+.conductor/

@@ -1,0 +1,16 @@
+[project]
+name = "ccc"
+version = "0.1.0"
+description = "AI-powered changelog automation system using Claude Agent SDK"
+readme = "README.md"
+requires-python = "==3.13.5"
+dependencies = [
+    "black>=25.9.0",
+    "claude-agent-sdk>=0.1.0",
+    "python-dotenv>=1.1.1",
+    "slack-sdk>=3.33.6",
+    "requests>=2.32.3",
+    "python-slugify>=8.0.0",
+    "pytest>=8.4.2",
+    "pygithub>=2.8.1",
+]

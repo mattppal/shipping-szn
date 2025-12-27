@@ -1,0 +1,62 @@
+---
+targets: ['*']
+description: "Claude Agent SDK patterns for tools, agents, and MCP servers"
+globs: ["**/main.py", "**/servers/**/*.py"]
+---
+
+# Claude Agent SDK Patterns
+
+**Reference:** See [main.py](../main.py) for complete implementation examples.
+
+## Tool Implementation
+
+- Use `@tool` decorator from `claude_agent_sdk`
+- Return dict with `is_error` boolean field
+- Include comprehensive docstrings with Args and Returns
+- Handle errors gracefully and return error info in result dict
+- See `servers/github_tools.py` and `servers/slack_tools.py` for examples
+
+**Documentation:** Refer to Claude Agent SDK documentation for tool decorator patterns.
+
+## Agent Definition Pattern
+
+- Use `AgentDefinition` class from `claude_agent_sdk`
+- Provide clear `description` for routing (one-line)
+- Include comprehensive `prompt` with all required context
+- Select appropriate `model`: `"sonnet"` for complex tasks, `"haiku"` for simpler tasks
+- Assign `tools` from `permission_groups`
+
+**Model selection:**
+
+- `sonnet`: Complex tasks (changelog_writer, template_formatter)
+- `haiku`: Simpler tasks (review_and_feedback, pr_writer)
+
+See `main.py` for complete agent definitions with prompts and context.
+
+## MCP Server Configuration
+
+- Define all MCP servers in `servers/config.py` as `MCP_SERVERS` dictionary
+- Use `create_sdk_mcp_server()` for custom tools (see `claude_agent_sdk` docs)
+- Use `McpHttpServerConfig` for external HTTP MCP servers
+- Always load environment variables with `load_dotenv()` before `os.getenv()`
+
+See `servers/config.py` for implementation examples.
+
+## Permission Management
+
+- Define granular permissions in `permissions` dictionary (see `main.py`)
+- Group permissions into `permission_groups` by agent role
+- Follow principle of least privilege - agents only get necessary permissions
+- Use permission strings like `"Read(./docs/**/*)"` and `"Write(./docs/**/*)"`
+
+**Security Note:** Currently using `permission_mode="bypassPermissions"` for development. Switch to `"explicit"` for production security. See [ARCHITECTURE_REVIEW.md](../ARCHITECTURE_REVIEW.md) for details.
+
+## Orchestrator Pattern
+
+- Create `ClaudeAgentOptions` with agents dictionary
+- Each agent is an `AgentDefinition` object
+- Configure `system_prompt`, `permission_mode`, `model`, `cwd`, and `mcp_servers`
+- Use `ClaudeSDKClient` with async context manager
+
+See `main.py` for complete orchestrator setup and usage.
+

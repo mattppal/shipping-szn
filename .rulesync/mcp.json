@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "rulesync-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "rulesync", "mcp"],
+      "env": {}
+    },
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ],
+      "env": {}
+    }
+  }
+}

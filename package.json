@@ -1,0 +1,12 @@
+{
+  "engines": {
+    "node": ">=24.4.0"
+  },
+  "scripts": {
+    "postinstall": "npx rulesync generate"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-code": "2.0.54",
+    "rulesync": "4.1.0"
+  }
+}

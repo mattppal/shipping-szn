@@ -1,0 +1,35 @@
+modules = ["python-base-3.13", "nodejs-24"]
+
+[agent]
+expertMode = true
+
+[nix]
+channel = "stable-25_05"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "changelog-automation"
+
+[[workflows.workflow]]
+name = "changelog-automation"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "uv run main.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[deployment]
+deploymentTarget = "scheduled"
+build = ["pnpm", "install"]
+run = ["sh", "-c", "uv run main.py"]
