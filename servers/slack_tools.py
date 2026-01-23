@@ -3,9 +3,10 @@
 import hashlib
 import mimetypes
 import os
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from dotenv import load_dotenv
 from slugify import slugify
@@ -28,6 +29,25 @@ MEDIA_BASE_DIR = "./docs/updates/media"
 MAX_CONCURRENT_DOWNLOADS = 5
 MAX_TEXT_PREVIEW_LENGTH = 300
 DEFAULT_DAYS_BACK = 7
+
+# Module-level tracker for fetched message timestamps
+# Structure: {channel_id: set of timestamps}
+_fetched_timestamps: Dict[str, Set[str]] = defaultdict(set)
+
+
+def track_fetched_timestamp(channel_id: str, timestamp: str) -> None:
+    """Track a fetched message timestamp for later marking as processed."""
+    _fetched_timestamps[channel_id].add(timestamp)
+
+
+def get_fetched_timestamps() -> Dict[str, List[str]]:
+    """Get all tracked timestamps grouped by channel."""
+    return {channel: list(timestamps) for channel, timestamps in _fetched_timestamps.items()}
+
+
+def clear_fetched_timestamps() -> None:
+    """Clear all tracked timestamps (call after marking or on failure)."""
+    _fetched_timestamps.clear()
 
 import re
 
@@ -291,6 +311,9 @@ async def fetch_messages_from_channel(args: dict[str, Any]) -> dict[str, Any]:
                     msg["replies"] = replies
 
                 messages.append(msg)
+                
+                # Track this message timestamp for later marking as processed
+                track_fetched_timestamp(channel_id, msg["ts"])
 
             except SlackApiError:
                 continue

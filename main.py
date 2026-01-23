@@ -11,7 +11,12 @@ from claude_agent_sdk import (
 )
 
 from servers.config import MCP_SERVERS
-from servers.slack_tools import fetch_messages_from_channel, mark_messages_processed
+from servers.slack_tools import (
+    fetch_messages_from_channel,
+    mark_messages_processed,
+    get_fetched_timestamps,
+    clear_fetched_timestamps,
+)
 from servers.github_tools import add_changelog_frontmatter, create_changelog_pr
 from util.messages import display_message
 
