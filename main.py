@@ -11,7 +11,13 @@ from claude_agent_sdk import (
 )
 
 from servers.config import MCP_SERVERS
-from servers.slack_tools import fetch_messages_from_channel, mark_messages_processed
+from servers.slack_tools import (
+    fetch_messages_from_channel,
+    mark_messages_processed,
+    mark_messages_as_processed_sync,
+    get_fetched_timestamps,
+    clear_fetched_timestamps,
+)
 from servers.github_tools import add_changelog_frontmatter, create_changelog_pr
 from util.messages import display_message
 
@@ -137,14 +143,14 @@ def build_permission_groups() -> dict[str, list[str]]:
             permissions["search_replit"],  # Validate doc links
             permissions["search_mintlify"],  # Validate doc links
         ],
-        # pr_writer: Creates GitHub PR, marks Slack messages as processed
-        # NEEDS: PR tool, Slack mark tool, read today's file (for timestamps)
+        # pr_writer: Creates GitHub PR
+        # NEEDS: PR tool, read today's file
         # DOES NOT NEED: Write/edit (PR tool handles uploads), glob, broad access
+        # NOTE: Message marking is handled automatically by the system after successful completion
         "pr_writer": [
             permissions["create_changelog_pr"],
-            permissions["mark_messages_processed"],
             "Skill",
-            f"Read({today_file})",  # Read timestamps from first line
+            f"Read({today_file})",
         ],
     }
 
@@ -164,7 +170,7 @@ You have access to these specialized subagents. Use the Task tool with the EXACT
 | changelog_writer      | Fetch Slack messages and create raw changelog draft  |
 | template_formatter    | Reformat changelog to match template structure       |
 | review_and_feedback   | Review copy/tone/accuracy and fix issues             |
-| pr_writer             | Create GitHub PR and mark Slack messages processed   |
+| pr_writer             | Create GitHub PR with changelog content              |
 
 ## Workflow
 
@@ -172,7 +178,7 @@ Execute these steps in order using the Task tool:
 1. Task(subagent_type="changelog_writer") - Fetches Slack updates and writes ./docs/updates/YYYY-MM-DD.md
 2. Task(subagent_type="template_formatter") - Reformats the file to match template
 3. Task(subagent_type="review_and_feedback") - Reviews and fixes copy issues
-4. Task(subagent_type="pr_writer") - Creates PR and marks messages processed
+4. Task(subagent_type="pr_writer") - Creates PR with changelog content
 
 ## Critical Rules
 
@@ -199,9 +205,26 @@ def cleanup_existing_changelog() -> None:
             print(f"Removed stray draft file: {draft}")
 
 
+def mark_fetched_messages_as_processed() -> None:
+    """Mark all fetched messages as processed using the tracked timestamps."""
+    tracked = get_fetched_timestamps()
+    if not tracked:
+        print("No messages to mark as processed")
+        return
+    
+    for channel_id, timestamps in tracked.items():
+        if timestamps:
+            print(f"Marking {len(timestamps)} messages as processed in channel {channel_id}")
+            result = mark_messages_as_processed_sync(channel_id, timestamps)
+            print(result["summary"])
+
+
 async def main():
     # Clean up any existing changelog for today before starting
     cleanup_existing_changelog()
+    
+    # Clear any stale tracked timestamps from previous runs
+    clear_fetched_timestamps()
 
     options = ClaudeAgentOptions(
         agents={
@@ -222,7 +245,6 @@ async def main():
                     Steps:
                     1. fetch_messages_from_channel(channel_id, days_back={DEFAULT_DAYS_BACK}, ignore_processed_marker={IGNORE_PROCESSED}, strip_emojis={STRIP_EMOJIS})
                     2. Write raw content with Slack permalinks per entry to ./docs/updates/{CURRENT_DATE}.md
-                    3. First line MUST be: <!-- slack_timestamps: ts1,ts2,ts3 -->
 
                     See media-insertion skill for adding images from Slack response.
                     See brand-writing skill for voice/tone.
@@ -239,7 +261,6 @@ async def main():
                     Follow changelog-formatting skill exactly - it has the complete template, examples, and checklist.
 
                     Key requirements:
-                    - Preserve slack_timestamps comment (first line)
                     - Remove all Slack links from output
                     - Remove H1 headings and horizontal rules
                 """,
@@ -275,9 +296,7 @@ async def main():
                        - Example correct call: {{"changelog_path": "...", "media_files": [], ...}}
                        - The tool will auto-discover media files from ./docs/updates/media/{CURRENT_DATE}/
 
-                    3. After PR created, mark Slack messages processed:
-                       - Parse timestamps from first line: <!-- slack_timestamps: ts1,ts2,ts3 -->
-                       - mark_messages_processed(channel_id="{SLACK_CHANNEL_ID}", message_timestamps=[...])
+                    Note: Message marking is handled automatically by the system after successful completion.
                 """,
                 model="sonnet",
                 tools=permission_groups["pr_writer"],
@@ -291,11 +310,25 @@ async def main():
         allowed_tools=["Skill"],  # Enable Skill tool
         mcp_servers={**MCP_SERVERS, "native_tools": NATIVE_TOOLS_SERVER},
     )
-    async with ClaudeSDKClient(options=options) as client:
-        await client.query(prompt=USER_PROMPT)
+    run_succeeded = False
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(prompt=USER_PROMPT)
 
-        async for message in client.receive_response():
-            display_message(message)
+            async for message in client.receive_response():
+                display_message(message)
+        
+        # If we get here without exception, the run succeeded
+        run_succeeded = True
+    finally:
+        if run_succeeded:
+            # Mark all fetched messages as processed only on success
+            mark_fetched_messages_as_processed()
+        else:
+            print("Run failed - not marking messages as processed")
+        
+        # Always clear tracked timestamps to prevent cross-run leakage
+        clear_fetched_timestamps()
 
 
 asyncio.run(main())
