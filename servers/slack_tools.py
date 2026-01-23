@@ -277,15 +277,27 @@ async def fetch_messages_from_channel(args: dict[str, Any]) -> dict[str, Any]:
         start_time = end_time - timedelta(days=days_back)
 
         messages = []
-
-        result = slack_client.conversations_history(
-            channel=channel_id,
-            oldest=str(start_time.timestamp()),
-            latest=str(end_time.timestamp()),
-        )
+        all_raw_messages = []
+        
+        # Paginate through all messages in the time range
+        cursor = None
+        while True:
+            result = slack_client.conversations_history(
+                channel=channel_id,
+                oldest=str(start_time.timestamp()),
+                latest=str(end_time.timestamp()),
+                cursor=cursor,
+                limit=200,  # Slack's max per request
+            )
+            all_raw_messages.extend(result.get("messages", []))
+            
+            # Check for more pages
+            cursor = result.get("response_metadata", {}).get("next_cursor")
+            if not cursor:
+                break
 
         skipped_processed = 0
-        for msg in result["messages"]:
+        for msg in all_raw_messages:
             if not ignore_processed_marker and has_processed_emoji(msg, PROCESSED_EMOJI):
                 skipped_processed += 1
                 continue
@@ -415,6 +427,52 @@ async def fetch_messages_from_channel(args: dict[str, Any]) -> dict[str, Any]:
 PROCESSED_EMOJI = "summarizer_ship"
 
 
+def mark_messages_as_processed_sync(channel_id: str, timestamps: List[str]) -> Dict[str, Any]:
+    """Core logic for marking messages as processed. Directly callable from Python.
+    
+    Args:
+        channel_id: The Slack channel ID
+        timestamps: List of message 'ts' values to mark as processed
+    
+    Returns:
+        Dict with success_count, already_reacted, failed list, and summary string
+    """
+    success_count = 0
+    already_reacted = 0
+    failed = []
+
+    for ts in timestamps:
+        try:
+            slack_client.reactions_add(
+                channel=channel_id,
+                name=PROCESSED_EMOJI,
+                timestamp=ts
+            )
+            success_count += 1
+        except SlackApiError as e:
+            if e.response.get("error") == "already_reacted":
+                already_reacted += 1
+            else:
+                failed.append({"ts": ts, "error": str(e)})
+
+    summary = f"Marked {success_count} messages as processed with :{PROCESSED_EMOJI}:\n"
+    if already_reacted > 0:
+        summary += f"Skipped {already_reacted} messages (already marked)\n"
+    if failed:
+        summary += f"Failed to mark {len(failed)} messages:\n"
+        for f in failed[:5]:
+            summary += f"  - {f['ts']}: {f['error']}\n"
+        if len(failed) > 5:
+            summary += f"  ... and {len(failed) - 5} more\n"
+    
+    return {
+        "success_count": success_count,
+        "already_reacted": already_reacted,
+        "failed": failed,
+        "summary": summary,
+    }
+
+
 @tool(
     name="mark_messages_processed",
     description=f"Add a :{PROCESSED_EMOJI}: reaction emoji to Slack messages to mark them as processed. Used for idempotency tracking to avoid re-processing the same messages.",
@@ -449,36 +507,10 @@ async def mark_messages_processed(args: dict[str, Any]) -> dict[str, Any]:
                 "is_error": True,
             }
 
-        success_count = 0
-        already_reacted = 0
-        failed = []
-
-        for ts in timestamps:
-            try:
-                slack_client.reactions_add(
-                    channel=channel_id,
-                    name=PROCESSED_EMOJI,
-                    timestamp=ts
-                )
-                success_count += 1
-            except SlackApiError as e:
-                if e.response.get("error") == "already_reacted":
-                    already_reacted += 1
-                else:
-                    failed.append({"ts": ts, "error": str(e)})
-
-        summary = f"Marked {success_count} messages as processed with :{PROCESSED_EMOJI}:\n"
-        if already_reacted > 0:
-            summary += f"Skipped {already_reacted} messages (already marked)\n"
-        if failed:
-            summary += f"Failed to mark {len(failed)} messages:\n"
-            for f in failed[:5]:
-                summary += f"  - {f['ts']}: {f['error']}\n"
-            if len(failed) > 5:
-                summary += f"  ... and {len(failed) - 5} more\n"
+        result = mark_messages_as_processed_sync(channel_id, timestamps)
 
         return {
-            "content": [{"type": "text", "text": summary}],
+            "content": [{"type": "text", "text": result["summary"]}],
         }
 
     except SlackApiError as e:
