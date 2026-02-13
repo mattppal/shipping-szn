@@ -3,10 +3,6 @@ title: [Month Day, Year]
 description: 2 min read
 ---
 
-import { AuthorCard } from '/snippets/author-card.mdx';
-
-<AuthorCard/>
-
 ## What's new
 
 * [Feature One](#feature-one)
