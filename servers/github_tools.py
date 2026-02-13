@@ -473,7 +473,7 @@ def update_docs_json_content(docs_content: str, year: str, month: str, day: str)
 
 @tool(
     name="add_changelog_frontmatter",
-    description="Add properly formatted frontmatter to changelog content. Returns the content with MDX frontmatter including title (formatted as 'Month DD, YYYY'), description, and AuthorCard import.",
+    description="Add properly formatted frontmatter to changelog content. Returns the content with MDX frontmatter including title (formatted as 'Month DD, YYYY') and description.",
     input_schema={
         "content": str,
         "date": str,
@@ -506,10 +506,6 @@ async def add_changelog_frontmatter(args: Dict[str, Any]) -> Dict[str, Any]:
 title: {formatted_date}
 description: 2 min read
 ---
-
-import {{ AuthorCard }} from '/snippets/author-card.mdx';
-
-<AuthorCard/>
 
 """
 

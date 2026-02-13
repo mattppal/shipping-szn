@@ -32,15 +32,11 @@ Use the `add_changelog_frontmatter` tool - don't write frontmatter manually:
 title: October 30, 2025
 description: 2 min read
 ---
-
-import { AuthorCard } from '/snippets/author-card.mdx';
-
-<AuthorCard/>
 ```
 
 ### 2. Create "What's new" TOC
 
-Immediately after `<AuthorCard/>`, add a "## What's new" section with anchor-linked bullet points for ALL updates (both Platform and Teams/Enterprise):
+Immediately after frontmatter, add a "## What's new" section with anchor-linked bullet points for ALL updates (both Platform and Teams/Enterprise):
 
 ```markdown
 ## What's new
@@ -164,10 +160,6 @@ title: January 15, 2025
 description: 2 min read
 ---
 
-import { AuthorCard } from '/snippets/author-card.mdx';
-
-<AuthorCard/>
-
 ## What's new
 
 * [New dashboard](#new-dashboard)
@@ -221,7 +213,7 @@ Before completing the formatting task, verify:
 - [ ] Frontmatter uses `add_changelog_frontmatter` tool (not manually written)
 - [ ] Title format is "Month DD, YYYY" (e.g., "January 15, 2025")
 - [ ] No H1 heading after frontmatter (no `# Changelog:...`)
-- [ ] "## What's new" section with anchor-linked TOC appears first (after AuthorCard)
+- [ ] "## What's new" section with anchor-linked TOC appears first (after frontmatter)
 - [ ] "## Platform" section appears after What's new
 - [ ] "## Teams and Enterprise" section appears after Platform (only if relevant content exists)
 - [ ] Features use `###` headings under their respective sections
